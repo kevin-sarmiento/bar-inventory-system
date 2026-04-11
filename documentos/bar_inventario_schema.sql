@@ -330,6 +330,68 @@ INSERT INTO unidades_medida (nombre, abreviatura) VALUES
 ('Kilogramo', 'kg'),
 ('Caja', 'cj');
 
+CREATE TABLE ventas (
+                        id BIGSERIAL PRIMARY KEY,
+                        fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        usuario_id BIGINT NOT NULL,
+                        total NUMERIC(14,2) NOT NULL,
+                        estado VARCHAR(30) DEFAULT 'CONFIRMADA'
+);
+
+CREATE TABLE detalle_ventas (
+                                id BIGSERIAL PRIMARY KEY,
+                                venta_id BIGINT,
+                                producto_id BIGINT,
+                                cantidad NUMERIC(12,2),
+                                precio_unitario NUMERIC(12,2),
+                                subtotal NUMERIC(14,2)
+);
+
+CREATE TABLE conversiones_unidades (
+                                       id BIGSERIAL PRIMARY KEY,
+                                       producto_id BIGINT,
+                                       unidad_origen_id BIGINT,
+                                       unidad_destino_id BIGINT,
+                                       factor_conversion NUMERIC(12,4)
+);
+
+ALTER TABLE auditorias ADD COLUMN tabla_afectada VARCHAR(100);
+ALTER TABLE auditorias ADD COLUMN registro_id BIGINT;
+ALTER TABLE auditorias ADD COLUMN valor_anterior JSONB;
+ALTER TABLE auditorias ADD COLUMN valor_nuevo JSONB;
+ALTER TABLE ventas
+    ADD CONSTRAINT fk_venta_usuario
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id);
+
+ALTER TABLE detalle_ventas
+    ADD CONSTRAINT fk_detalle_venta
+        FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE;
+
+ALTER TABLE detalle_ventas
+    ADD CONSTRAINT fk_detalle_venta_producto
+        FOREIGN KEY (producto_id) REFERENCES productos(id);
+ALTER TABLE conversiones_unidades
+    ADD CONSTRAINT fk_conv_producto FOREIGN KEY (producto_id) REFERENCES productos(id);
+
+ALTER TABLE conversiones_unidades
+    ADD CONSTRAINT fk_conv_origen FOREIGN KEY (unidad_origen_id) REFERENCES unidades_medida(id);
+
+ALTER TABLE conversiones_unidades
+    ADD CONSTRAINT fk_conv_destino FOREIGN KEY (unidad_destino_id) REFERENCES unidades_medida(id);
+
+ALTER TABLE productos ADD COLUMN precio_venta NUMERIC(12,2);
+
+ALTER TABLE detalle_ventas
+    ALTER COLUMN venta_id SET NOT NULL;
+
+ALTER TABLE detalle_ventas
+    ALTER COLUMN producto_id SET NOT NULL;
+
+ALTER TABLE conversiones_unidades
+    ALTER COLUMN factor_conversion SET NOT NULL;
+
+CREATE INDEX idx_ventas_fecha ON ventas(fecha);
+CREATE INDEX idx_detalle_ventas_venta ON detalle_ventas(venta_id);
 -- =========================================================
 -- 10. FLUJO LOGICO DEL SISTEMA
 -- =========================================================
