@@ -21,6 +21,15 @@ public class InventoryTransaction {
     @Column("transaction_date")
     private Instant transactionDate;
 
+    @Column("source_location_id")
+    private Long sourceLocationId;
+
+    @Column("target_location_id")
+    private Long targetLocationId;
+
+    @Column("supplier_id")
+    private Long supplierId;
+
     private String status;
 
     @Column("created_by")
@@ -28,6 +37,8 @@ public class InventoryTransaction {
 
     @Column("reference_text")
     private String referenceText;
+
+    private String reason;
 
     public Long getId() {
         return id;
@@ -69,6 +80,30 @@ public class InventoryTransaction {
         this.status = status;
     }
 
+    public Long getSourceLocationId() {
+        return sourceLocationId;
+    }
+
+    public void setSourceLocationId(Long sourceLocationId) {
+        this.sourceLocationId = sourceLocationId;
+    }
+
+    public Long getTargetLocationId() {
+        return targetLocationId;
+    }
+
+    public void setTargetLocationId(Long targetLocationId) {
+        this.targetLocationId = targetLocationId;
+    }
+
+    public Long getSupplierId() {
+        return supplierId;
+    }
+
+    public void setSupplierId(Long supplierId) {
+        this.supplierId = supplierId;
+    }
+
     public Long getCreatedBy() {
         return createdBy;
     }
@@ -83,5 +118,13 @@ public class InventoryTransaction {
 
     public void setReferenceText(String referenceText) {
         this.referenceText = referenceText;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public void setReason(String reason) {
+        this.reason = reason;
     }
 }

@@ -1,5 +1,6 @@
 package com.bar.inventory.model;
 
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -11,6 +12,7 @@ public class Supplier {
     private Long id;
 
     @Column("supplier_name")
+    @NotBlank(message = "name es obligatorio")
     private String name;
 
     private String email;

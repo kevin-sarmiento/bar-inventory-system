@@ -3,6 +3,7 @@ package com.bar.inventory.controller;
 import com.bar.inventory.dto.AuthRequest;
 import com.bar.inventory.dto.AuthResponse;
 import com.bar.inventory.service.AuthService;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,7 +22,7 @@ public class AuthController {
     }
 
     @PostMapping(path = "/login", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<AuthResponse> login(@RequestBody AuthRequest request) {
+    public Mono<AuthResponse> login(@Valid @RequestBody AuthRequest request) {
         return authService.login(request);
     }
 }

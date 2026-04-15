@@ -1,30 +1,65 @@
-# Sistema de inventario de barras
-Monolito reactivo con Spring Boot 3, WebFlux, JWT y PostgreSQL.
+# Bar Inventory System
+Reactive monolith with Spring Boot WebFlux, JWT auth, PostgreSQL and Flyway.
 
-## Cómo levantar en local
-1) `docker compose up -d` (levanta Postgres y la app en 8080).  
-2) Credenciales iniciales: `admin / admin123` (se crean con Flyway).  
-3) Salud: `GET http://localhost:8080/actuator/health`
+## Run with Docker
+1. `docker compose build --no-cache`
+2. `docker compose up -d`
+3. API base URL: `http://localhost:8082`
+4. Swagger UI: `http://localhost:8082/swagger-ui.html`
 
-## Endpoints principales
-- `POST /api/auth/login` → body `{ "username": "admin", "password": "admin123" }` devuelve `token`.
-- `GET /api/products` (Bearer token).
-- `POST /api/products` crea producto.
-- `PUT /api/products/{id}`, `DELETE /api/products/{id}`.
-- `GET /api/categories`, `POST /api/categories`, `PUT /api/categories/{id}`, `DELETE /api/categories/{id}`.
-- `GET /api/units`, `POST /api/units`, `PUT /api/units/{id}`, `DELETE /api/units/{id}`.
-- `GET /api/suppliers`, `POST /api/suppliers`, `PUT /api/suppliers/{id}`, `DELETE /api/suppliers/{id}`.
-- `GET /api/transactions`, `POST /api/transactions`.
-- `GET /api/reports/stock?locationId=` stock actual (vista `vw_inventory_current`).
-- `GET /api/reports/movements?from=YYYY-MM-DD&to=YYYY-MM-DD&type=SALE` movimientos (vista `vw_report_movements`).
+Default login:
+- user: `admin`
+- password: `admin123`
 
-## Estructura
-- `src/main/java/com/bar/inventory` código de app.
-- `src/main/resources/db/migration` migraciones Flyway (V1 esquema completo, V2 usuario admin).
-- `documentos` requisitos.xlsx, script SQL, colección Postman, tabla de requisitos (MD) y flujo de proceso.
+## Main Endpoints
+Auth:
+- `POST /api/auth/login`
 
-## Build sin Docker
-```
-mvn clean package -DskipTests
-java -jar target/bar-inventory-system-0.1.0.jar
-```
+Masters:
+- `GET/POST/PUT/DELETE /api/categories`
+- `GET/POST/PUT/DELETE /api/units`
+- `GET/POST/PUT/DELETE /api/suppliers`
+- `GET/POST/PUT/DELETE /api/products`
+- `GET/POST/PUT/DELETE /api/locations`
+- `GET/POST/PUT/DELETE /api/recipes`
+- `GET /api/recipes/{id}/items`
+- `POST /api/recipes/{id}/items`
+- `DELETE /api/recipes/items/{itemId}`
+- `GET/POST/PUT/DELETE /api/menu-items`
+
+Inventory transactions:
+- `GET /api/transactions`
+- `GET /api/transactions/{id}`
+- `GET /api/transactions/{id}/items`
+- `POST /api/transactions` (header + items)
+- `PATCH /api/transactions/{id}/status?value=POSTED`
+- `GET /api/stock-balances`
+
+Sales:
+- `GET /api/sales`
+- `GET /api/sales/{id}`
+- `GET /api/sales/{id}/items`
+- `POST /api/sales` (supports `processInventory=true`)
+- `POST /api/sales/{id}/post-inventory?userId=1`
+
+Physical counts:
+- `GET /api/physical-counts`
+- `GET /api/physical-counts/{id}`
+- `GET /api/physical-counts/{id}/items`
+- `POST /api/physical-counts`
+- `POST /api/physical-counts/{id}/close?userId=1`
+
+Reports:
+- `GET /api/reports/stock`
+- `GET /api/reports/movements`
+- `GET /api/reports/waste`
+- `GET /api/reports/consumption`
+- `GET /api/reports/count-differences`
+- `GET /api/reports/inventory-valuation`
+- `GET /api/reports/audit`
+
+## Notes
+- SQL functions and triggers in `V1__init.sql` handle stock effects, sales posting and count closing.
+- Backend service layer calls database functions:
+  - `fn_post_sale_to_inventory`
+  - `fn_close_physical_count`

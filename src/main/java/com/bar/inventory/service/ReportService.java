@@ -1,5 +1,8 @@
 package com.bar.inventory.service;
 
+import com.bar.inventory.dto.AuditHistoryDto;
+import com.bar.inventory.dto.CountDifferenceDto;
+import com.bar.inventory.dto.InventoryValuationDto;
 import com.bar.inventory.dto.MovementReportDto;
 import com.bar.inventory.dto.StockViewDto;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -61,8 +64,75 @@ public class ReportService {
                 )).all();
     }
 
+    public Flux<MovementReportDto> getWaste(LocalDate from, LocalDate to) {
+        return getMovementsFromView("vw_report_waste", from, to, null);
+    }
+
+    public Flux<MovementReportDto> getConsumption(LocalDate from, LocalDate to) {
+        return getMovementsFromView("vw_report_consumption", from, to, null);
+    }
+
     public Flux<MovementReportDto> getMovements(LocalDate from, LocalDate to, String type) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM vw_report_movements WHERE 1=1");
+        return getMovementsFromView("vw_report_movements", from, to, type);
+    }
+
+    public Flux<CountDifferenceDto> getCountDifferences() {
+        return client.sql("SELECT * FROM vw_report_count_differences ORDER BY count_date DESC")
+                .map((row, meta) -> {
+                    CountDifferenceDto dto = new CountDifferenceDto();
+                    dto.setPhysicalCountId(row.get("physical_count_id", Long.class));
+                    dto.setCountNumber(row.get("count_number", String.class));
+                    dto.setCountDate(toInstant(row.get("count_date", OffsetDateTime.class)));
+                    dto.setLocationName(row.get("location_name", String.class));
+                    dto.setProductId(row.get("product_id", Long.class));
+                    dto.setProductName(row.get("product_name", String.class));
+                    dto.setTheoreticalQtyBase(row.get("theoretical_qty_base", java.math.BigDecimal.class));
+                    dto.setActualQtyBase(row.get("actual_qty_base", java.math.BigDecimal.class));
+                    dto.setDifferenceQtyBase(row.get("difference_qty_base", java.math.BigDecimal.class));
+                    dto.setBaseUnit(row.get("base_unit", String.class));
+                    dto.setCreatedBy(row.get("created_by", String.class));
+                    dto.setApprovedBy(row.get("approved_by", String.class));
+                    return dto;
+                }).all();
+    }
+
+    public Flux<InventoryValuationDto> getInventoryValuation() {
+        return client.sql("SELECT * FROM vw_report_inventory_valuation ORDER BY product_name")
+                .map((row, meta) -> {
+                    InventoryValuationDto dto = new InventoryValuationDto();
+                    dto.setProductId(row.get("product_id", Long.class));
+                    dto.setProductName(row.get("product_name", String.class));
+                    dto.setCategoryName(row.get("category_name", String.class));
+                    dto.setLocationId(row.get("location_id", Long.class));
+                    dto.setLocationName(row.get("location_name", String.class));
+                    dto.setBaseUnit(row.get("base_unit", String.class));
+                    dto.setTotalQtyBase(row.get("total_qty_base", java.math.BigDecimal.class));
+                    dto.setAvgCostBase(row.get("avg_cost_base", java.math.BigDecimal.class));
+                    dto.setTotalInventoryValue(row.get("total_inventory_value", java.math.BigDecimal.class));
+                    return dto;
+                }).all();
+    }
+
+    public Flux<AuditHistoryDto> getAuditHistory() {
+        return client.sql("SELECT * FROM vw_audit_history ORDER BY changed_at DESC")
+                .map((row, meta) -> {
+                    AuditHistoryDto dto = new AuditHistoryDto();
+                    dto.setAuditId(row.get("audit_id", Long.class));
+                    dto.setTableName(row.get("table_name", String.class));
+                    dto.setRecordPk(row.get("record_pk", String.class));
+                    dto.setActionType(row.get("action_type", String.class));
+                    dto.setChangedAt(toInstant(row.get("changed_at", OffsetDateTime.class)));
+                    dto.setChangedBy(row.get("changed_by", String.class));
+                    Object oldData = row.get("old_data");
+                    Object newData = row.get("new_data");
+                    dto.setOldData(oldData == null ? null : oldData.toString());
+                    dto.setNewData(newData == null ? null : newData.toString());
+                    return dto;
+                }).all();
+    }
+
+    private Flux<MovementReportDto> getMovementsFromView(String viewName, LocalDate from, LocalDate to, String type) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM " + viewName + " WHERE 1=1");
         Map<String, Object> params = new java.util.HashMap<>();
 
         if (from != null) {
@@ -88,7 +158,7 @@ public class ReportService {
                 row.get("transaction_id", Long.class),
                 row.get("transaction_number", String.class),
                 row.get("transaction_type", String.class),
-                row.get("transaction_date", java.time.OffsetDateTime.class),
+                row.get("transaction_date", OffsetDateTime.class),
                 row.get("source_location", String.class),
                 row.get("target_location", String.class),
                 row.get("product_id", Long.class),
@@ -162,5 +232,9 @@ public class ReportService {
         dto.setStatus(status);
         dto.setCreatedBy(createdBy);
         return dto;
+    }
+
+    private java.time.Instant toInstant(OffsetDateTime dateTime) {
+        return dateTime == null ? null : dateTime.toInstant();
     }
 }

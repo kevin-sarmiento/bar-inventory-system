@@ -53,7 +53,7 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "baseUrl", "value": "http://localhost:8082" },
     { "key": "token", "value": "" }
   ]
 }

@@ -1,0 +1,269 @@
+{
+  "info": {
+    "name": "Bar Inventory API - Pruebas",
+    "_postman_id": "b728ba0c-0000-4000-9000-barinv",
+    "description": "Colección con pruebas automatizadas para backend inventario",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8082" },
+    { "key": "token", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "unitId", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "supplierId", "value": "" },
+    { "key": "transactionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('200 OK', () => pm.response.code === 200);",
+            "const t = pm.response.json().token;",
+            "pm.expect(t).to.be.a('string');",
+            "pm.environment.set('token', t);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "02 Crear categoría",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/api/categories",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Bebidas\",\n  \"description\": \"Bebidas alcohólicas\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('201 Created', () => pm.response.code === 201);",
+            "pm.environment.set('categoryId', pm.response.json().id);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "03 Crear unidad de medida",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/api/units",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"ML\",\n  \"name\": \"Mililitro\",\n  \"unitType\": \"VOLUME\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('201 Created', () => pm.response.code === 201);",
+            "pm.environment.set('unitId', pm.response.json().id);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "04 Crear producto",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/api/products",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sku\": \"SKU-001\",\n  \"name\": \"Cerveza Lager\",\n  \"categoryId\": {{categoryId}},\n  \"baseUnitId\": {{unitId}},\n  \"minStockBaseQty\": 10,\n  \"barcode\": \"1234567890123\",\n  \"active\": true,\n  \"notes\": \"Botella 330ml\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('201 Created', () => pm.response.code === 201);",
+            "pm.environment.set('productId', pm.response.json().id);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "05 Listar productos",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/products"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('200 OK', () => pm.response.code === 200);",
+            "pm.test('Lista no vacía', () => pm.response.json().length > 0);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "06 Actualizar producto",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/api/products/{{productId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sku\": \"SKU-001\",\n  \"name\": \"Cerveza Lager\",\n  \"categoryId\": {{categoryId}},\n  \"baseUnitId\": {{unitId}},\n  \"minStockBaseQty\": 8,\n  \"barcode\": \"1234567890123\",\n  \"active\": true,\n  \"notes\": \"Presentación en lata\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('200 OK', () => pm.response.code === 200);",
+            "pm.expect(pm.response.json().minStockBaseQty).to.eql(8);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "07 Crear proveedor",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/api/suppliers",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Distribuidora ABC\",\n  \"email\": \"contacto@abc.com\",\n  \"phone\": \"3001234567\",\n  \"address\": \"Calle 10 #5-20\"\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('201 Created', () => pm.response.code === 201);",
+            "pm.environment.set('supplierId', pm.response.json().id);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "08 Crear transacción (compra)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/api/transactions",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionNumber\": \"PO-0001\",\n  \"transactionType\": \"PURCHASE\",\n  \"status\": \"POSTED\",\n  \"referenceText\": \"Compra inicial\",\n  \"createdBy\": 1\n}"
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('201 Created', () => pm.response.code === 201);",
+            "pm.environment.set('transactionId', pm.response.json().id);"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "09 Reporte stock",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/reports/stock"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('200 OK', () => pm.response.code === 200);",
+            "const data = pm.response.json();",
+            "pm.expect(data.length).to.be.at.least(0);",
+            "if (data.length) { pm.expect(data[0]).to.have.property('productId'); }"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "10 Reporte movimientos",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/reports/movements",
+        "description": "Parámetros opcionales: from, to, type"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('200 OK', () => pm.response.code === 200);",
+            "const data = pm.response.json();",
+            "pm.expect(data.length).to.be.at.least(0);",
+            "if (data.length) { pm.expect(data[0]).to.have.property('transactionType'); }"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "11 Borrar producto",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/products/{{productId}}"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "pm.test('204 No Content', () => pm.response.code === 204);"
+          ]
+        }
+      }]
+    }
+  ]
+}

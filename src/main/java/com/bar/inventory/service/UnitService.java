@@ -25,6 +25,7 @@ public class UnitService {
 
     public Mono<UnitOfMeasure> create(UnitOfMeasure unit) {
         unit.setId(null);
+        applyDefaults(unit);
         return repository.save(unit);
     }
 
@@ -33,11 +34,18 @@ public class UnitService {
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Unidad no encontrada")))
                 .flatMap(existing -> {
                     unit.setId(id);
+                    applyDefaults(unit);
                     return repository.save(unit);
                 });
     }
 
     public Mono<Void> delete(Long id) {
         return repository.deleteById(id);
+    }
+
+    private void applyDefaults(UnitOfMeasure unit) {
+        if (unit.getUnitType() == null || unit.getUnitType().isBlank()) {
+            unit.setUnitType("COUNT");
+        }
     }
 }

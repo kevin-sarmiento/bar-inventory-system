@@ -4,7 +4,6 @@ import com.bar.inventory.security.JwtAuthenticationManager;
 import com.bar.inventory.security.JwtServerSecurityContextRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -34,20 +33,21 @@ public class SecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
-                .authenticationManager(authManager)
-                .securityContextRepository(contextRepository)
                 .authorizeExchange(exchange -> exchange
-                        .pathMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        .pathMatchers("/actuator/health").permitAll()
+                        .pathMatchers("/api/auth/**").permitAll()
+                        .pathMatchers("/actuator/**").permitAll()
+                        .pathMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyExchange().authenticated()
                 )
+                .authenticationManager(authManager)
+                .securityContextRepository(contextRepository)
                 .build();
     }
 
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization", "Content-Type"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

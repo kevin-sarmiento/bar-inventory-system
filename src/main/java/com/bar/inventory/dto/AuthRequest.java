@@ -1,7 +1,12 @@
 package com.bar.inventory.dto;
 
+import jakarta.validation.constraints.NotBlank;
+
 public class AuthRequest {
+    @NotBlank(message = "username es obligatorio")
     private String username;
+
+    @NotBlank(message = "password es obligatorio")
     private String password;
 
     public String getUsername() {

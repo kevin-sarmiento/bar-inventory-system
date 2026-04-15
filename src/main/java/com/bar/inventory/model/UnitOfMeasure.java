@@ -1,5 +1,6 @@
 package com.bar.inventory.model;
 
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -11,12 +12,16 @@ public class UnitOfMeasure {
     private Long id;
 
     @Column("unit_code")
+    @NotBlank(message = "code es obligatorio")
     private String code;
 
     @Column("unit_name")
+    @NotBlank(message = "name es obligatorio")
     private String name;
 
-    private String description;
+    @Column("unit_type")
+    @NotBlank(message = "unitType es obligatorio")
+    private String unitType;
 
     public Long getId() {
         return id;
@@ -42,11 +47,11 @@ public class UnitOfMeasure {
         this.name = name;
     }
 
-    public String getDescription() {
-        return description;
+    public String getUnitType() {
+        return unitType;
     }
 
-    public void setDescription(String description) {
-        this.description = description;
+    public void setUnitType(String unitType) {
+        this.unitType = unitType;
     }
 }

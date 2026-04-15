@@ -1,5 +1,8 @@
 package com.bar.inventory.model;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -16,15 +19,20 @@ public class Product {
     private String sku;
 
     @Column("product_name")
+    @NotBlank(message = "name es obligatorio")
     private String name;
 
     @Column("category_id")
+    @NotNull(message = "categoryId es obligatorio")
     private Long categoryId;
 
     @Column("base_unit_id")
+    @NotNull(message = "baseUnitId es obligatorio")
     private Long baseUnitId;
 
     @Column("min_stock_base_qty")
+    @NotNull(message = "minStockBaseQty es obligatorio")
+    @DecimalMin(value = "0", message = "minStockBaseQty no puede ser negativo")
     private BigDecimal minStockBaseQty;
 
     private String barcode;
