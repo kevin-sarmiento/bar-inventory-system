@@ -25,6 +25,9 @@ public class Sale {
     @Column("cashier_user_id")
     private Long cashierUserId;
 
+    @Column("shift_id")
+    private Long shiftId;
+
     @Column("total_amount")
     private BigDecimal totalAmount;
 
@@ -77,6 +80,14 @@ public class Sale {
 
     public void setCashierUserId(Long cashierUserId) {
         this.cashierUserId = cashierUserId;
+    }
+
+    public Long getShiftId() {
+        return shiftId;
+    }
+
+    public void setShiftId(Long shiftId) {
+        this.shiftId = shiftId;
     }
 
     public BigDecimal getTotalAmount() {

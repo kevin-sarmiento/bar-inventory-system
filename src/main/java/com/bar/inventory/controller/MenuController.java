@@ -27,7 +27,7 @@ public class MenuController {
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<MenuItem> findById(@PathVariable Long id) {
+    public Mono<MenuItem> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 
@@ -40,14 +40,14 @@ public class MenuController {
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<MenuItem> update(@PathVariable Long id, @Valid @RequestBody MenuItem menuItem) {
+    public Mono<MenuItem> update(@PathVariable("id") Long id, @Valid @RequestBody MenuItem menuItem) {
         return service.update(id, menuItem);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Void> delete(@PathVariable Long id) {
+    public Mono<Void> delete(@PathVariable("id") Long id) {
         return service.delete(id);
     }
 }

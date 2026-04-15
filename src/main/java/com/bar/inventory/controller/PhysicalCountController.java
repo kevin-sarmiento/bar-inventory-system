@@ -31,13 +31,13 @@ public class PhysicalCountController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO','GERENTE')")
-    public Mono<PhysicalCount> findById(@PathVariable Long id) {
+    public Mono<PhysicalCount> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 
     @GetMapping("/{id}/items")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO','GERENTE')")
-    public Flux<PhysicalCountItem> findItems(@PathVariable Long id) {
+    public Flux<PhysicalCountItem> findItems(@PathVariable("id") Long id) {
         return service.findItems(id);
     }
 
@@ -50,7 +50,7 @@ public class PhysicalCountController {
 
     @PostMapping("/{id}/close")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','GERENTE')")
-    public Mono<Map<String, String>> close(@PathVariable Long id, @RequestParam("userId") Long userId) {
+    public Mono<Map<String, String>> close(@PathVariable("id") Long id, @RequestParam("userId") Long userId) {
         return service.closeCount(id, userId).thenReturn(Map.of("status", "closed"));
     }
 }

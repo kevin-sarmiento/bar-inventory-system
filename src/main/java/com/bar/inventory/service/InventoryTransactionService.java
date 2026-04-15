@@ -11,6 +11,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
 
@@ -98,26 +99,46 @@ public class InventoryTransactionService {
         return repository.findById(transactionId)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Transaccion no encontrada")))
                 .flatMap(tx -> {
+                    validateStatusTransition(tx.getStatus(), status);
                     tx.setStatus(status);
                     return repository.save(tx);
                 });
     }
 
     private void validateCreateRequest(CreateTransactionRequest request) {
+        if (request.getTransactionNumber() == null || request.getTransactionNumber().isBlank()) {
+            throw new IllegalArgumentException("transactionNumber es obligatorio");
+        }
         if (request.getTransactionType() == null || !ALLOWED_TYPES.contains(request.getTransactionType())) {
             throw new IllegalArgumentException("transactionType invalido");
         }
         if (request.getStatus() != null && !ALLOWED_STATUSES.contains(request.getStatus())) {
             throw new IllegalArgumentException("status invalido");
         }
+        if (request.getCreatedBy() != null && request.getCreatedBy() <= 0) {
+            throw new IllegalArgumentException("createdBy invalido");
+        }
         validateLocations(request);
         if ("PURCHASE".equals(request.getTransactionType()) && request.getSupplierId() == null) {
             throw new IllegalArgumentException("supplierId es obligatorio para transacciones PURCHASE");
         }
+        if ("RETURN_TO_SUPPLIER".equals(request.getTransactionType()) && request.getSupplierId() == null) {
+            throw new IllegalArgumentException("supplierId es obligatorio para RETURN_TO_SUPPLIER");
+        }
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("items no puede estar vacio");
         }
+        HashSet<Long> productIds = new HashSet<>();
         for (var item : request.getItems()) {
+            if (item.getProductId() == null) {
+                throw new IllegalArgumentException("Cada item debe tener productId");
+            }
+            if (!productIds.add(item.getProductId())) {
+                throw new IllegalArgumentException("No se permiten productos duplicados en una misma transaccion");
+            }
+            if (item.getUnitId() == null) {
+                throw new IllegalArgumentException("Cada item debe tener unitId");
+            }
             if (item.getQuantity() == null || item.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("Cada item debe tener quantity > 0");
             }
@@ -146,5 +167,21 @@ public class InventoryTransactionService {
         if (Set.of("OPENING_STOCK", "PURCHASE", "ADJUSTMENT_IN", "RETURN_FROM_CUSTOMER").contains(type) && target == null) {
             throw new IllegalArgumentException(type + " requiere targetLocationId");
         }
+        if (Set.of("SALE", "CONSUMPTION", "WASTE", "ADJUSTMENT_OUT", "RETURN_TO_SUPPLIER").contains(type) && target != null) {
+            throw new IllegalArgumentException(type + " no debe enviar targetLocationId");
+        }
+        if (Set.of("OPENING_STOCK", "PURCHASE", "ADJUSTMENT_IN", "RETURN_FROM_CUSTOMER").contains(type) && source != null) {
+            throw new IllegalArgumentException(type + " no debe enviar sourceLocationId");
+        }
+    }
+
+    private void validateStatusTransition(String currentStatus, String nextStatus) {
+        if (nextStatus.equals(currentStatus)) {
+            return;
+        }
+        if ("DRAFT".equals(currentStatus) && Set.of("POSTED", "CANCELLED").contains(nextStatus)) {
+            return;
+        }
+        throw new IllegalStateException("No se permite cambiar el estado de %s a %s".formatted(currentStatus, nextStatus));
     }
 }

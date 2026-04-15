@@ -30,13 +30,13 @@ public class InventoryTransactionController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO','GERENTE','BARTENDER')")
-    public Mono<InventoryTransaction> findById(@PathVariable Long id) {
+    public Mono<InventoryTransaction> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 
     @GetMapping("/{id}/items")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO','GERENTE','BARTENDER')")
-    public Flux<InventoryTransactionItem> findItems(@PathVariable Long id) {
+    public Flux<InventoryTransactionItem> findItems(@PathVariable("id") Long id) {
         return service.findItemsByTransactionId(id);
     }
 
@@ -49,7 +49,7 @@ public class InventoryTransactionController {
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','GERENTE')")
-    public Mono<InventoryTransaction> updateStatus(@PathVariable Long id, @RequestParam("value") String value) {
+    public Mono<InventoryTransaction> updateStatus(@PathVariable("id") Long id, @RequestParam("value") String value) {
         return service.updateStatus(id, value);
     }
 }

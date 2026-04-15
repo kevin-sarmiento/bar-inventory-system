@@ -21,6 +21,7 @@ public class CreateSaleRequest {
     @NotNull(message = "locationId es obligatorio")
     private Long locationId;
     private Long cashierUserId;
+    private Long shiftId;
 
     @NotNull(message = "totalAmount es obligatorio")
     @DecimalMin(value = "0", message = "totalAmount no puede ser negativo")
@@ -61,6 +62,14 @@ public class CreateSaleRequest {
 
     public void setCashierUserId(Long cashierUserId) {
         this.cashierUserId = cashierUserId;
+    }
+
+    public Long getShiftId() {
+        return shiftId;
+    }
+
+    public void setShiftId(Long shiftId) {
+        this.shiftId = shiftId;
     }
 
     public BigDecimal getTotalAmount() {

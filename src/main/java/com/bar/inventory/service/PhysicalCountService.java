@@ -69,18 +69,38 @@ public class PhysicalCountService {
     }
 
     public Mono<Void> closeCount(Long physicalCountId, Long userId) {
+        if (physicalCountId == null || physicalCountId <= 0) {
+            return Mono.error(new IllegalArgumentException("physicalCountId invalido para cierre de conteo"));
+        }
         if (userId == null || userId <= 0) {
             return Mono.error(new IllegalArgumentException("userId invalido para cierre de conteo"));
         }
-        return databaseClient.sql("SELECT fn_close_physical_count(:countId, :userId)")
-                .bind("countId", physicalCountId)
-                .bind("userId", userId)
-                .fetch()
-                .rowsUpdated()
-                .then();
+        return physicalCountRepository.findById(physicalCountId)
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("Conteo fisico no encontrado")))
+                .flatMap(count -> {
+                    if (!"DRAFT".equals(count.getStatus())) {
+                        return Mono.error(new IllegalStateException("Solo se puede cerrar un conteo en estado DRAFT"));
+                    }
+                    return databaseClient.sql("SELECT fn_close_physical_count(%d, %d)".formatted(physicalCountId, userId))
+                            .fetch()
+                            .rowsUpdated()
+                            .then();
+                });
     }
 
     private void validateCountRequest(CreatePhysicalCountRequest request) {
+        if (request.getCountNumber() == null || request.getCountNumber().isBlank()) {
+            throw new IllegalArgumentException("countNumber es obligatorio");
+        }
+        if (request.getLocationId() == null || request.getLocationId() <= 0) {
+            throw new IllegalArgumentException("locationId es obligatorio");
+        }
+        if (request.getCountDate() == null) {
+            throw new IllegalArgumentException("countDate es obligatoria");
+        }
+        if (request.getCreatedBy() != null && request.getCreatedBy() <= 0) {
+            throw new IllegalArgumentException("createdBy invalido");
+        }
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("items no puede estar vacio");
         }

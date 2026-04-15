@@ -28,7 +28,7 @@ public class ProductCategoryController {
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<ProductCategory> findById(@PathVariable Long id) {
+    public Mono<ProductCategory> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 
@@ -41,14 +41,14 @@ public class ProductCategoryController {
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<ProductCategory> update(@PathVariable Long id, @Valid @RequestBody ProductCategory category) {
+    public Mono<ProductCategory> update(@PathVariable("id") Long id, @Valid @RequestBody ProductCategory category) {
         return service.update(id, category);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Void> delete(@PathVariable Long id) {
+    public Mono<Void> delete(@PathVariable("id") Long id) {
         return service.delete(id);
     }
 }

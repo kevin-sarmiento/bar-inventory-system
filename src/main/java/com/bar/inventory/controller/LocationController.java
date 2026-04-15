@@ -27,7 +27,7 @@ public class LocationController {
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<Location> findById(@PathVariable Long id) {
+    public Mono<Location> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 
@@ -40,14 +40,14 @@ public class LocationController {
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Location> update(@PathVariable Long id, @Valid @RequestBody Location location) {
+    public Mono<Location> update(@PathVariable("id") Long id, @Valid @RequestBody Location location) {
         return service.update(id, location);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Void> delete(@PathVariable Long id) {
+    public Mono<Void> delete(@PathVariable("id") Long id) {
         return service.delete(id);
     }
 }

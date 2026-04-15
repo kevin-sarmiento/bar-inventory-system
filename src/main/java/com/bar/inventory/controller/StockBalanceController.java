@@ -28,7 +28,7 @@ public class StockBalanceController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO','GERENTE','BARTENDER')")
-    public Mono<StockBalance> findById(@PathVariable Long id) {
+    public Mono<StockBalance> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 }
