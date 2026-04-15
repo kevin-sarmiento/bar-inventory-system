@@ -2,17 +2,41 @@ package com.bar.inventory.service;
 
 import com.bar.inventory.dto.AuditHistoryDto;
 import com.bar.inventory.dto.CountDifferenceDto;
+import com.bar.inventory.dto.DashboardHourlySalesDto;
+import com.bar.inventory.dto.DashboardSummaryDto;
+import com.bar.inventory.dto.DashboardTopProductDto;
+import com.bar.inventory.dto.DashboardTopUserDto;
 import com.bar.inventory.dto.InventoryValuationDto;
 import com.bar.inventory.dto.MovementReportDto;
+import com.bar.inventory.dto.ShiftReportDto;
+import com.bar.inventory.dto.ShiftSalesByLocationDto;
+import com.bar.inventory.dto.ShiftSalesByUserDto;
 import com.bar.inventory.dto.StockViewDto;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.IndexedColors;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Map;
 
 @Service
 public class ReportService {
@@ -26,9 +50,8 @@ public class ReportService {
     public Flux<StockViewDto> getCurrentStock(Long locationId) {
         String base = "SELECT * FROM vw_inventory_current";
         if (locationId != null) {
-            base += " WHERE location_id = :locationId";
+            base += " WHERE location_id = %d".formatted(locationId);
             return client.sql(base)
-                    .bind("locationId", locationId)
                     .map((row, meta) -> mapStock(row.get("stock_balance_id", Long.class),
                             row.get("product_id", Long.class),
                             row.get("product_name", String.class),
@@ -64,6 +87,90 @@ public class ReportService {
                 )).all();
     }
 
+    public Mono<DashboardSummaryDto> getDailyDashboard(LocalDate date, Long locationId) {
+        LocalDate reportDate = date == null ? LocalDate.now(ZoneId.of("America/Bogota")) : date;
+        String locationFilter = locationId == null ? "" : " AND location_id = %d".formatted(locationId);
+        String shiftLocationFilter = locationId == null ? "" : " AND ws.location_id = %d".formatted(locationId);
+
+        Mono<String> locationNameMono = resolveLocationFilterLabel(locationId);
+        Mono<SalesSummary> salesMono = client.sql("""
+                SELECT
+                    COUNT(*)::int AS sales_count,
+                    COALESCE(SUM(total_amount), 0) AS sales_total
+                FROM sales
+                WHERE sale_datetime::date = '%s'%s
+                """.formatted(reportDate, locationFilter))
+                .map((row, meta) -> new SalesSummary(
+                        row.get("sales_count", Integer.class),
+                        valueOrZero(row.get("sales_total", BigDecimal.class))
+                ))
+                .one()
+                .defaultIfEmpty(new SalesSummary(0, BigDecimal.ZERO));
+
+        Mono<ShiftStatusSummary> shiftsMono = client.sql("""
+                SELECT
+                    COALESCE(SUM(CASE WHEN ws.status = 'IN_PROGRESS' THEN 1 ELSE 0 END), 0)::int AS active_shifts,
+                    COALESCE(SUM(CASE WHEN ws.status = 'SCHEDULED' THEN 1 ELSE 0 END), 0)::int AS scheduled_shifts,
+                    COALESCE(SUM(CASE WHEN ws.status = 'COMPLETED' THEN 1 ELSE 0 END), 0)::int AS completed_shifts
+                FROM work_shifts ws
+                WHERE ws.scheduled_start::date = '%s'%s
+                """.formatted(reportDate, shiftLocationFilter))
+                .map((row, meta) -> new ShiftStatusSummary(
+                        row.get("active_shifts", Integer.class),
+                        row.get("scheduled_shifts", Integer.class),
+                        row.get("completed_shifts", Integer.class)
+                ))
+                .one()
+                .defaultIfEmpty(new ShiftStatusSummary(0, 0, 0));
+
+        Mono<InventorySnapshot> inventoryMono = client.sql("""
+                SELECT
+                    COUNT(*) FILTER (WHERE below_min_stock = true)::int AS low_stock_items,
+                    COALESCE(SUM(total_value), 0) AS inventory_value
+                FROM vw_inventory_current
+                WHERE 1=1%s
+                """.formatted(locationId == null ? "" : " AND location_id = %d".formatted(locationId)))
+                .map((row, meta) -> new InventorySnapshot(
+                        row.get("low_stock_items", Integer.class),
+                        valueOrZero(row.get("inventory_value", BigDecimal.class))
+                ))
+                .one()
+                .defaultIfEmpty(new InventorySnapshot(0, BigDecimal.ZERO));
+
+        Mono<MovementAggregate> wasteMono = movementAggregate("vw_report_waste", reportDate, locationId);
+        Mono<MovementAggregate> consumptionMono = movementAggregate("vw_report_consumption", reportDate, locationId);
+        Mono<List<DashboardTopProductDto>> topProductsMono = getTopProducts(reportDate, locationId).collectList();
+        Mono<List<DashboardTopUserDto>> topUsersMono = getTopUsers(reportDate, locationId).collectList();
+        Mono<List<DashboardHourlySalesDto>> hourlySalesMono = getHourlySales(reportDate, locationId).collectList();
+
+        return Mono.zip(locationNameMono, salesMono, shiftsMono, inventoryMono, wasteMono, consumptionMono, topProductsMono, topUsersMono)
+                .zipWith(hourlySalesMono)
+                .map(result -> {
+                    var tuple = result.getT1();
+                    var hourlySales = result.getT2();
+                    DashboardSummaryDto dto = new DashboardSummaryDto();
+                    dto.setReportDate(reportDate);
+                    dto.setLocationId(locationId);
+                    dto.setLocationName(tuple.getT1());
+                    dto.setSalesCount(tuple.getT2().count());
+                    dto.setSalesTotal(tuple.getT2().total());
+                    dto.setAverageTicket(calculateAverage(tuple.getT2().total(), tuple.getT2().count()));
+                    dto.setActiveShifts(tuple.getT3().active());
+                    dto.setScheduledShifts(tuple.getT3().scheduled());
+                    dto.setCompletedShifts(tuple.getT3().completed());
+                    dto.setLowStockItems(tuple.getT4().lowStockItems());
+                    dto.setInventoryValue(tuple.getT4().inventoryValue());
+                    dto.setWasteMovementsCount(tuple.getT5().count());
+                    dto.setWasteQuantity(tuple.getT5().quantity());
+                    dto.setConsumptionMovementsCount(tuple.getT6().count());
+                    dto.setConsumptionQuantity(tuple.getT6().quantity());
+                    dto.setTopProducts(tuple.getT7());
+                    dto.setTopUsers(tuple.getT8());
+                    dto.setHourlySales(hourlySales);
+                    return dto;
+                });
+    }
+
     public Flux<MovementReportDto> getWaste(LocalDate from, LocalDate to) {
         return getMovementsFromView("vw_report_waste", from, to, null);
     }
@@ -82,7 +189,7 @@ public class ReportService {
                     CountDifferenceDto dto = new CountDifferenceDto();
                     dto.setPhysicalCountId(row.get("physical_count_id", Long.class));
                     dto.setCountNumber(row.get("count_number", String.class));
-                    dto.setCountDate(toInstant(row.get("count_date", OffsetDateTime.class)));
+                    dto.setCountDate(toInstantValue(row.get("count_date")));
                     dto.setLocationName(row.get("location_name", String.class));
                     dto.setProductId(row.get("product_id", Long.class));
                     dto.setProductName(row.get("product_name", String.class));
@@ -121,7 +228,7 @@ public class ReportService {
                     dto.setTableName(row.get("table_name", String.class));
                     dto.setRecordPk(row.get("record_pk", String.class));
                     dto.setActionType(row.get("action_type", String.class));
-                    dto.setChangedAt(toInstant(row.get("changed_at", OffsetDateTime.class)));
+                    dto.setChangedAt(toInstant(row.get("changed_at", LocalDateTime.class)));
                     dto.setChangedBy(row.get("changed_by", String.class));
                     Object oldData = row.get("old_data");
                     Object newData = row.get("new_data");
@@ -131,34 +238,461 @@ public class ReportService {
                 }).all();
     }
 
-    private Flux<MovementReportDto> getMovementsFromView(String viewName, LocalDate from, LocalDate to, String type) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM " + viewName + " WHERE 1=1");
-        Map<String, Object> params = new java.util.HashMap<>();
+    public Flux<ShiftReportDto> getShiftSummary(LocalDate from, LocalDate to, Long userId, Long locationId) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT
+                    ws.shift_id,
+                    ws.user_id,
+                    u.username,
+                    u.full_name,
+                    ws.location_id,
+                    l.location_name,
+                    ws.role_name,
+                    ws.scheduled_start,
+                    ws.scheduled_end,
+                    ws.actual_start,
+                    ws.actual_end,
+                    ws.status,
+                    COUNT(s.sale_id)::int AS linked_sales_count,
+                    COALESCE(SUM(s.total_amount), 0) AS linked_sales_total
+                FROM work_shifts ws
+                JOIN app_users u ON u.user_id = ws.user_id
+                JOIN locations l ON l.location_id = ws.location_id
+                LEFT JOIN sales s ON s.shift_id = ws.shift_id
+                WHERE 1=1
+                """);
 
         if (from != null) {
-            sql.append(" AND transaction_date >= :fromDate");
-            params.put("fromDate", OffsetDateTime.of(from.atStartOfDay(), ZoneOffset.UTC));
+            sql.append(" AND ws.scheduled_start::date >= '").append(from).append("'");
         }
         if (to != null) {
-            sql.append(" AND transaction_date < :toDate");
-            params.put("toDate", OffsetDateTime.of(to.plusDays(1).atStartOfDay(), ZoneOffset.UTC));
+            sql.append(" AND ws.scheduled_start::date <= '").append(to).append("'");
+        }
+        if (userId != null) {
+            sql.append(" AND ws.user_id = ").append(userId);
+        }
+        if (locationId != null) {
+            sql.append(" AND ws.location_id = ").append(locationId);
+        }
+
+        sql.append("""
+                
+                GROUP BY
+                    ws.shift_id, ws.user_id, u.username, u.full_name,
+                    ws.location_id, l.location_name, ws.role_name,
+                    ws.scheduled_start, ws.scheduled_end, ws.actual_start, ws.actual_end, ws.status
+                ORDER BY ws.scheduled_start DESC, ws.shift_id DESC
+                """);
+
+        return client.sql(sql.toString())
+                .map((row, meta) -> {
+                    ShiftReportDto dto = new ShiftReportDto();
+                    dto.setShiftId(row.get("shift_id", Long.class));
+                    dto.setUserId(row.get("user_id", Long.class));
+                    dto.setUsername(row.get("username", String.class));
+                    dto.setFullName(row.get("full_name", String.class));
+                    dto.setLocationId(row.get("location_id", Long.class));
+                    dto.setLocationName(row.get("location_name", String.class));
+                    dto.setRoleName(row.get("role_name", String.class));
+                    dto.setScheduledStart(row.get("scheduled_start", Instant.class));
+                    dto.setScheduledEnd(row.get("scheduled_end", Instant.class));
+                    dto.setActualStart(row.get("actual_start", Instant.class));
+                    dto.setActualEnd(row.get("actual_end", Instant.class));
+                    dto.setStatus(row.get("status", String.class));
+                    dto.setLinkedSalesCount(row.get("linked_sales_count", Integer.class));
+                    dto.setLinkedSalesTotal(row.get("linked_sales_total", java.math.BigDecimal.class));
+                    return dto;
+                })
+                .all();
+    }
+
+    public Flux<ShiftSalesByUserDto> getShiftSalesByUser(LocalDate from, LocalDate to, Long locationId) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT
+                    ws.user_id,
+                    u.username,
+                    u.full_name,
+                    COUNT(DISTINCT ws.shift_id)::int AS shifts_count,
+                    COUNT(s.sale_id)::int AS linked_sales_count,
+                    COALESCE(SUM(s.total_amount), 0) AS linked_sales_total
+                FROM work_shifts ws
+                JOIN app_users u ON u.user_id = ws.user_id
+                LEFT JOIN sales s ON s.shift_id = ws.shift_id
+                WHERE 1=1
+                """);
+
+        appendShiftDateFilters(sql, from, to);
+        if (locationId != null) {
+            sql.append(" AND ws.location_id = ").append(locationId);
+        }
+
+        sql.append("""
+                
+                GROUP BY ws.user_id, u.username, u.full_name
+                ORDER BY linked_sales_total DESC, shifts_count DESC, u.full_name ASC
+                """);
+
+        return client.sql(sql.toString())
+                .map((row, meta) -> {
+                    ShiftSalesByUserDto dto = new ShiftSalesByUserDto();
+                    dto.setUserId(row.get("user_id", Long.class));
+                    dto.setUsername(row.get("username", String.class));
+                    dto.setFullName(row.get("full_name", String.class));
+                    dto.setShiftsCount(row.get("shifts_count", Integer.class));
+                    dto.setLinkedSalesCount(row.get("linked_sales_count", Integer.class));
+                    dto.setLinkedSalesTotal(row.get("linked_sales_total", java.math.BigDecimal.class));
+                    return dto;
+                })
+                .all();
+    }
+
+    public Flux<ShiftSalesByLocationDto> getShiftSalesByLocation(LocalDate from, LocalDate to, Long userId) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT
+                    ws.location_id,
+                    l.location_name,
+                    COUNT(DISTINCT ws.shift_id)::int AS shifts_count,
+                    COUNT(s.sale_id)::int AS linked_sales_count,
+                    COALESCE(SUM(s.total_amount), 0) AS linked_sales_total
+                FROM work_shifts ws
+                JOIN locations l ON l.location_id = ws.location_id
+                LEFT JOIN sales s ON s.shift_id = ws.shift_id
+                WHERE 1=1
+                """);
+
+        appendShiftDateFilters(sql, from, to);
+        if (userId != null) {
+            sql.append(" AND ws.user_id = ").append(userId);
+        }
+
+        sql.append("""
+                
+                GROUP BY ws.location_id, l.location_name
+                ORDER BY linked_sales_total DESC, shifts_count DESC, l.location_name ASC
+                """);
+
+        return client.sql(sql.toString())
+                .map((row, meta) -> {
+                    ShiftSalesByLocationDto dto = new ShiftSalesByLocationDto();
+                    dto.setLocationId(row.get("location_id", Long.class));
+                    dto.setLocationName(row.get("location_name", String.class));
+                    dto.setShiftsCount(row.get("shifts_count", Integer.class));
+                    dto.setLinkedSalesCount(row.get("linked_sales_count", Integer.class));
+                    dto.setLinkedSalesTotal(row.get("linked_sales_total", java.math.BigDecimal.class));
+                    return dto;
+                })
+                .all();
+    }
+
+    public Mono<String> exportShiftSummaryCsv(LocalDate from, LocalDate to, Long userId, Long locationId) {
+        return getShiftSummary(from, to, userId, locationId)
+                .collectList()
+                .map(rows -> toCsv(
+                        List.of("shiftId", "userId", "username", "fullName", "locationId", "locationName",
+                                "roleName", "scheduledStart", "scheduledEnd", "actualStart", "actualEnd",
+                                "status", "linkedSalesCount", "linkedSalesTotal"),
+                        rows.stream()
+                                .map(row -> List.of(
+                                        csvValue(row.getShiftId()),
+                                        csvValue(row.getUserId()),
+                                        csvValue(row.getUsername()),
+                                        csvValue(row.getFullName()),
+                                        csvValue(row.getLocationId()),
+                                        csvValue(row.getLocationName()),
+                                        csvValue(row.getRoleName()),
+                                        csvValue(row.getScheduledStart()),
+                                        csvValue(row.getScheduledEnd()),
+                                        csvValue(row.getActualStart()),
+                                        csvValue(row.getActualEnd()),
+                                        csvValue(row.getStatus()),
+                                        csvValue(row.getLinkedSalesCount()),
+                                        csvValue(row.getLinkedSalesTotal())
+                                ))
+                                .toList()
+                ));
+    }
+
+    public Mono<String> exportShiftSalesByUserCsv(LocalDate from, LocalDate to, Long locationId) {
+        return getShiftSalesByUser(from, to, locationId)
+                .collectList()
+                .map(rows -> toCsv(
+                        List.of("userId", "username", "fullName", "shiftsCount", "linkedSalesCount", "linkedSalesTotal"),
+                        rows.stream()
+                                .map(row -> List.of(
+                                        csvValue(row.getUserId()),
+                                        csvValue(row.getUsername()),
+                                        csvValue(row.getFullName()),
+                                        csvValue(row.getShiftsCount()),
+                                        csvValue(row.getLinkedSalesCount()),
+                                        csvValue(row.getLinkedSalesTotal())
+                                ))
+                                .toList()
+                ));
+    }
+
+    public Mono<String> exportShiftSalesByLocationCsv(LocalDate from, LocalDate to, Long userId) {
+        return getShiftSalesByLocation(from, to, userId)
+                .collectList()
+                .map(rows -> toCsv(
+                        List.of("locationId", "locationName", "shiftsCount", "linkedSalesCount", "linkedSalesTotal"),
+                        rows.stream()
+                                .map(row -> List.of(
+                                        csvValue(row.getLocationId()),
+                                        csvValue(row.getLocationName()),
+                                        csvValue(row.getShiftsCount()),
+                                        csvValue(row.getLinkedSalesCount()),
+                                        csvValue(row.getLinkedSalesTotal())
+                                ))
+                                .toList()
+                ));
+    }
+
+    public Mono<byte[]> exportShiftSummaryXlsx(LocalDate from, LocalDate to, Long userId, Long locationId) {
+        return Mono.zip(
+                getShiftSummary(from, to, userId, locationId).collectList(),
+                resolveUserFilterLabel(userId),
+                resolveLocationFilterLabel(locationId)
+        ).map(tuple -> toWorkbookBytes("Resumen de turnos",
+                buildShiftSummaryFilters(from, to, userId, tuple.getT2(), locationId, tuple.getT3()),
+                List.of("ID Turno", "ID Usuario", "Usuario", "Nombre completo", "ID Sede", "Sede",
+                        "Rol del turno", "Inicio programado", "Fin programado", "Entrada real", "Salida real",
+                        "Estado", "Cantidad de ventas", "Total vendido"),
+                tuple.getT1().stream()
+                        .map(row -> List.of(
+                                cellNumber(row.getShiftId()),
+                                cellNumber(row.getUserId()),
+                                cellText(row.getUsername()),
+                                cellText(row.getFullName()),
+                                cellNumber(row.getLocationId()),
+                                cellText(row.getLocationName()),
+                                cellText(row.getRoleName()),
+                                cellDateTime(row.getScheduledStart()),
+                                cellDateTime(row.getScheduledEnd()),
+                                cellDateTime(row.getActualStart()),
+                                cellDateTime(row.getActualEnd()),
+                                cellText(row.getStatus()),
+                                cellNumber(row.getLinkedSalesCount()),
+                                cellAmount(row.getLinkedSalesTotal())
+                        ))
+                        .toList()));
+    }
+
+    public Mono<byte[]> exportShiftSalesByUserXlsx(LocalDate from, LocalDate to, Long locationId) {
+        return Mono.zip(
+                getShiftSalesByUser(from, to, locationId).collectList(),
+                resolveLocationFilterLabel(locationId)
+        ).map(tuple -> toWorkbookBytes("Ventas por usuario",
+                buildByUserFilters(from, to, locationId, tuple.getT2()),
+                List.of("ID Usuario", "Usuario", "Nombre completo", "Cantidad de turnos", "Cantidad de ventas", "Total vendido"),
+                tuple.getT1().stream()
+                        .map(row -> List.of(
+                                cellNumber(row.getUserId()),
+                                cellText(row.getUsername()),
+                                cellText(row.getFullName()),
+                                cellNumber(row.getShiftsCount()),
+                                cellNumber(row.getLinkedSalesCount()),
+                                cellAmount(row.getLinkedSalesTotal())
+                        ))
+                        .toList()));
+    }
+
+    public Mono<byte[]> exportShiftSalesByLocationXlsx(LocalDate from, LocalDate to, Long userId) {
+        return Mono.zip(
+                getShiftSalesByLocation(from, to, userId).collectList(),
+                resolveUserFilterLabel(userId)
+        ).map(tuple -> toWorkbookBytes("Ventas por sede",
+                buildByLocationFilters(from, to, userId, tuple.getT2()),
+                List.of("ID Sede", "Sede", "Cantidad de turnos", "Cantidad de ventas", "Total vendido"),
+                tuple.getT1().stream()
+                        .map(row -> List.of(
+                                cellNumber(row.getLocationId()),
+                                cellText(row.getLocationName()),
+                                cellNumber(row.getShiftsCount()),
+                                cellNumber(row.getLinkedSalesCount()),
+                                cellAmount(row.getLinkedSalesTotal())
+                        ))
+                        .toList()));
+    }
+
+    public Mono<byte[]> exportCurrentStockXlsx(Long locationId) {
+        return Mono.zip(
+                getCurrentStock(locationId).collectList(),
+                resolveLocationFilterLabel(locationId)
+        ).map(tuple -> toWorkbookBytes("Inventario actual",
+                buildStockFilters(locationId, tuple.getT2()),
+                List.of("ID Stock", "ID Producto", "Producto", "Categoria", "ID Sede", "Sede", "Unidad base",
+                        "Lote", "Vencimiento", "Cantidad base", "Stock minimo", "Bajo minimo",
+                        "Costo promedio", "Valor total"),
+                tuple.getT1().stream()
+                        .map(row -> List.of(
+                                cellNumber(row.getStockBalanceId()),
+                                cellNumber(row.getProductId()),
+                                cellText(row.getProductName()),
+                                cellText(row.getCategoryName()),
+                                cellNumber(row.getLocationId()),
+                                cellText(row.getLocationName()),
+                                cellText(row.getBaseUnit()),
+                                cellText(row.getLotNumber()),
+                                cellDate(row.getExpirationDate()),
+                                cellAmount(row.getQuantityBase()),
+                                cellAmount(row.getMinStockBaseQty()),
+                                cellText(row.getBelowMinStock() == null ? null : (row.getBelowMinStock() ? "Si" : "No")),
+                                cellAmount(row.getAvgUnitCostBase()),
+                                cellAmount(row.getTotalValue())
+                        ))
+                        .toList()));
+    }
+
+    public Mono<byte[]> exportMovementsXlsx(LocalDate from, LocalDate to, String type) {
+        return getMovements(from, to, type)
+                .collectList()
+                .map(rows -> toWorkbookBytes("Movimientos",
+                        buildMovementFilters(from, to, type),
+                        List.of("ID Movimiento", "Numero", "Tipo", "Fecha", "Ubicacion origen", "Ubicacion destino",
+                                "ID Producto", "Producto", "ID Unidad", "Unidad", "Cantidad", "Cantidad base",
+                                "Costo unitario", "Costo unitario base", "Lote", "Vencimiento",
+                                "Referencia", "Motivo", "Estado", "Creado por"),
+                        rows.stream()
+                                .map(row -> List.of(
+                                        cellNumber(row.getTransactionId()),
+                                        cellText(row.getTransactionNumber()),
+                                        cellText(row.getTransactionType()),
+                                        cellDateTime(row.getTransactionDate()),
+                                        cellText(row.getSourceLocation()),
+                                        cellText(row.getTargetLocation()),
+                                        cellNumber(row.getProductId()),
+                                        cellText(row.getProductName()),
+                                        cellNumber(row.getUnitId()),
+                                        cellText(row.getUnitCode()),
+                                        cellAmount(row.getQuantity()),
+                                        cellAmount(row.getQuantityBase()),
+                                        cellAmount(row.getUnitCost()),
+                                        cellAmount(row.getUnitCostBase()),
+                                        cellText(row.getLotNumber()),
+                                        cellDate(row.getExpirationDate()),
+                                        cellText(row.getReferenceText()),
+                                        cellText(row.getReason()),
+                                        cellText(row.getStatus()),
+                                        cellText(row.getCreatedBy())
+                                ))
+                                .toList()));
+    }
+
+    public Mono<byte[]> exportWasteXlsx(LocalDate from, LocalDate to) {
+        return getWaste(from, to)
+                .collectList()
+                .map(rows -> toWorkbookBytes("Mermas",
+                        buildDateRangeFilters(from, to),
+                        movementHeaders(),
+                        rows.stream()
+                                .map(this::movementRow)
+                                .toList()));
+    }
+
+    public Mono<byte[]> exportConsumptionXlsx(LocalDate from, LocalDate to) {
+        return getConsumption(from, to)
+                .collectList()
+                .map(rows -> toWorkbookBytes("Consumo",
+                        buildDateRangeFilters(from, to),
+                        movementHeaders(),
+                        rows.stream()
+                                .map(this::movementRow)
+                                .toList()));
+    }
+
+    public Mono<byte[]> exportAuditHistoryXlsx() {
+        return getAuditHistory()
+                .collectList()
+                .map(rows -> toWorkbookBytes("Auditoria",
+                        buildAuditFilters(),
+                        List.of("ID Auditoria", "Tabla", "PK Registro", "Accion", "Fecha cambio", "Usuario",
+                                "Datos anteriores", "Datos nuevos"),
+                        rows.stream()
+                                .map(row -> List.of(
+                                        cellNumber(row.getAuditId()),
+                                        cellText(row.getTableName()),
+                                        cellText(row.getRecordPk()),
+                                        cellText(row.getActionType()),
+                                        cellDateTime(row.getChangedAt()),
+                                        cellText(row.getChangedBy()),
+                                        cellText(row.getOldData()),
+                                        cellText(row.getNewData())
+                                ))
+                                .toList()));
+    }
+
+    public Mono<byte[]> exportInventoryValuationXlsx() {
+        return getInventoryValuation()
+                .collectList()
+                .map(rows -> toWorkbookBytes("Valorizacion inventario",
+                        buildInventoryValuationFilters(),
+                        List.of("ID Producto", "Producto", "Categoria", "ID Sede", "Sede", "Unidad base",
+                                "Cantidad total", "Costo promedio", "Valor total inventario"),
+                        rows.stream()
+                                .map(row -> List.of(
+                                        cellNumber(row.getProductId()),
+                                        cellText(row.getProductName()),
+                                        cellText(row.getCategoryName()),
+                                        cellNumber(row.getLocationId()),
+                                        cellText(row.getLocationName()),
+                                        cellText(row.getBaseUnit()),
+                                        cellAmount(row.getTotalQtyBase()),
+                                        cellAmount(row.getAvgCostBase()),
+                                        cellAmount(row.getTotalInventoryValue())
+                                ))
+                                .toList()));
+    }
+
+    public Mono<byte[]> exportCountDifferencesXlsx() {
+        return getCountDifferences()
+                .collectList()
+                .map(rows -> toWorkbookBytes("Diferencias conteo",
+                        buildCountDifferencesFilters(),
+                        List.of("ID Conteo", "Numero conteo", "Fecha conteo", "Sede", "ID Producto", "Producto",
+                                "Cantidad teorica", "Cantidad real", "Diferencia", "Unidad base", "Creado por", "Aprobado por"),
+                        rows.stream()
+                                .map(row -> List.of(
+                                        cellNumber(row.getPhysicalCountId()),
+                                        cellText(row.getCountNumber()),
+                                        cellDateTime(row.getCountDate()),
+                                        cellText(row.getLocationName()),
+                                        cellNumber(row.getProductId()),
+                                        cellText(row.getProductName()),
+                                        cellAmount(row.getTheoreticalQtyBase()),
+                                        cellAmount(row.getActualQtyBase()),
+                                        cellAmount(row.getDifferenceQtyBase()),
+                                        cellText(row.getBaseUnit()),
+                                        cellText(row.getCreatedBy()),
+                                        cellText(row.getApprovedBy())
+                                ))
+                                .toList()));
+    }
+
+    private Flux<MovementReportDto> getMovementsFromView(String viewName, LocalDate from, LocalDate to, String type) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM " + viewName + " WHERE 1=1");
+
+        if (from != null) {
+            sql.append(" AND transaction_date >= '")
+                    .append(OffsetDateTime.of(from.atStartOfDay(), ZoneOffset.UTC))
+                    .append("'");
+        }
+        if (to != null) {
+            sql.append(" AND transaction_date < '")
+                    .append(OffsetDateTime.of(to.plusDays(1).atStartOfDay(), ZoneOffset.UTC))
+                    .append("'");
         }
         if (type != null && !type.isBlank()) {
-            sql.append(" AND transaction_type = :type");
-            params.put("type", type);
+            sql.append(" AND transaction_type = '")
+                    .append(type.replace("'", "''"))
+                    .append("'");
         }
         sql.append(" ORDER BY transaction_date DESC");
 
-        DatabaseClient.GenericExecuteSpec spec = client.sql(sql.toString());
-        for (var entry : params.entrySet()) {
-            spec = spec.bind(entry.getKey(), entry.getValue());
-        }
-
-        return spec.map((row, meta) -> mapMovement(
+        return client.sql(sql.toString()).map((row, meta) -> mapMovement(
                 row.get("transaction_id", Long.class),
                 row.get("transaction_number", String.class),
                 row.get("transaction_type", String.class),
-                row.get("transaction_date", OffsetDateTime.class),
+                toInstantValue(row.get("transaction_date")),
                 row.get("source_location", String.class),
                 row.get("target_location", String.class),
                 row.get("product_id", Long.class),
@@ -202,7 +736,7 @@ public class ReportService {
     }
 
     private MovementReportDto mapMovement(Long transactionId, String transactionNumber, String transactionType,
-                                          java.time.OffsetDateTime transactionDate,
+                                          Instant transactionDate,
                                           String sourceLocation, String targetLocation,
                                           Long productId, String productName,
                                           Long unitId, String unitCode,
@@ -214,7 +748,7 @@ public class ReportService {
         dto.setTransactionId(transactionId);
         dto.setTransactionNumber(transactionNumber);
         dto.setTransactionType(transactionType);
-        dto.setTransactionDate(transactionDate == null ? null : transactionDate.toInstant());
+        dto.setTransactionDate(transactionDate);
         dto.setSourceLocation(sourceLocation);
         dto.setTargetLocation(targetLocation);
         dto.setProductId(productId);
@@ -236,5 +770,483 @@ public class ReportService {
 
     private java.time.Instant toInstant(OffsetDateTime dateTime) {
         return dateTime == null ? null : dateTime.toInstant();
+    }
+
+    private Instant toInstantValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime.toInstant();
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime.toInstant(ZoneOffset.UTC);
+        }
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        throw new IllegalArgumentException("Tipo de fecha no soportado: " + value.getClass().getName());
+    }
+
+    private void appendShiftDateFilters(StringBuilder sql, LocalDate from, LocalDate to) {
+        if (from != null) {
+            sql.append(" AND ws.scheduled_start::date >= '").append(from).append("'");
+        }
+        if (to != null) {
+            sql.append(" AND ws.scheduled_start::date <= '").append(to).append("'");
+        }
+    }
+
+    private String toCsv(List<String> headers, List<List<String>> rows) {
+        List<String> lines = new ArrayList<>();
+        lines.add(String.join(",", headers));
+        for (List<String> row : rows) {
+            lines.add(String.join(",", row));
+        }
+        return String.join("\n", lines);
+    }
+
+    private String csvValue(Object value) {
+        if (value == null) {
+            return "";
+        }
+        if (value instanceof BigDecimal decimal) {
+            return escapeCsv(decimal.toPlainString());
+        }
+        return escapeCsv(value.toString());
+    }
+
+    private String escapeCsv(String value) {
+        String escaped = value.replace("\"", "\"\"");
+        return "\"" + escaped + "\"";
+    }
+
+    private byte[] toWorkbookBytes(String sheetName, List<List<String>> filters, List<String> headers, List<List<ExcelCellValue>> rows) {
+        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            Sheet filtersSheet = workbook.createSheet("Filtros");
+            Sheet sheet = workbook.createSheet(sheetName);
+            ExcelStyles styles = createStyles(workbook);
+            writeFiltersSheet(filtersSheet, filters, styles);
+            writeHeaderRow(sheet, 0, headers, styles.header());
+            sheet.createFreezePane(0, 1);
+            for (int i = 0; i < rows.size(); i++) {
+                writeDataRow(sheet, i + 1, rows.get(i), styles);
+            }
+            for (int i = 0; i < headers.size(); i++) {
+                sheet.autoSizeColumn(i);
+            }
+            filtersSheet.autoSizeColumn(0);
+            filtersSheet.autoSizeColumn(1);
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (IOException ex) {
+            throw new IllegalStateException("No se pudo generar el archivo XLSX", ex);
+        }
+    }
+
+    private void writeFiltersSheet(Sheet sheet, List<List<String>> filters, ExcelStyles styles) {
+        writeHeaderRow(sheet, 0, List.of("Filtro", "Valor"), styles.header());
+        for (int i = 0; i < filters.size(); i++) {
+            var row = sheet.createRow(i + 1);
+            Cell keyCell = row.createCell(0);
+            keyCell.setCellValue(filters.get(i).get(0));
+            keyCell.setCellStyle(styles.text());
+
+            Cell valueCell = row.createCell(1);
+            valueCell.setCellValue(filters.get(i).get(1));
+            valueCell.setCellStyle(styles.text());
+        }
+        sheet.createFreezePane(0, 1);
+    }
+
+    private void writeHeaderRow(Sheet sheet, int rowIndex, List<String> values, CellStyle headerStyle) {
+        var row = sheet.createRow(rowIndex);
+        for (int i = 0; i < values.size(); i++) {
+            Cell cell = row.createCell(i);
+            cell.setCellValue(values.get(i));
+            cell.setCellStyle(headerStyle);
+        }
+    }
+
+    private void writeDataRow(Sheet sheet, int rowIndex, List<ExcelCellValue> values, ExcelStyles styles) {
+        var row = sheet.createRow(rowIndex);
+        for (int i = 0; i < values.size(); i++) {
+            ExcelCellValue value = values.get(i);
+            Cell cell = row.createCell(i);
+            if (value.value() == null) {
+                cell.setBlank();
+                cell.setCellStyle(styles.text());
+                continue;
+            }
+
+            switch (value.type()) {
+                case NUMBER -> {
+                    cell.setCellValue(((Number) value.value()).doubleValue());
+                    cell.setCellStyle(styles.number());
+                }
+                case AMOUNT -> {
+                    cell.setCellValue(((BigDecimal) value.value()).doubleValue());
+                    cell.setCellStyle(styles.amount());
+                }
+                case DATE_TIME -> {
+                    cell.setCellValue(formatInstant((Instant) value.value()));
+                    cell.setCellStyle(styles.dateTime());
+                }
+                case DATE -> {
+                    cell.setCellValue(formatLocalDate((LocalDate) value.value()));
+                    cell.setCellStyle(styles.date());
+                }
+                case TEXT -> {
+                    cell.setCellValue(value.value().toString());
+                    cell.setCellStyle(styles.text());
+                }
+            }
+        }
+    }
+
+    private ExcelStyles createStyles(Workbook workbook) {
+        var dataFormat = workbook.createDataFormat();
+
+        Font headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerFont.setColor(IndexedColors.WHITE.getIndex());
+
+        CellStyle headerStyle = workbook.createCellStyle();
+        headerStyle.setFont(headerFont);
+        headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle textStyle = workbook.createCellStyle();
+
+        CellStyle numberStyle = workbook.createCellStyle();
+        numberStyle.setDataFormat(dataFormat.getFormat("0"));
+
+        CellStyle amountStyle = workbook.createCellStyle();
+        amountStyle.setDataFormat(dataFormat.getFormat("#,##0.00"));
+
+        CellStyle dateTimeStyle = workbook.createCellStyle();
+        dateTimeStyle.setDataFormat(dataFormat.getFormat("@"));
+
+        CellStyle dateStyle = workbook.createCellStyle();
+        dateStyle.setDataFormat(dataFormat.getFormat("@"));
+
+        return new ExcelStyles(headerStyle, textStyle, numberStyle, amountStyle, dateTimeStyle, dateStyle);
+    }
+
+    private String formatInstant(Instant instant) {
+        return instant.atZone(ZoneId.of("America/Bogota"))
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private String formatLocalDate(LocalDate date) {
+        return date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+    }
+
+    private ExcelCellValue cellText(Object value) {
+        return new ExcelCellValue(value == null ? null : value.toString(), ExcelCellType.TEXT);
+    }
+
+    private ExcelCellValue cellNumber(Number value) {
+        return new ExcelCellValue(value, ExcelCellType.NUMBER);
+    }
+
+    private ExcelCellValue cellAmount(BigDecimal value) {
+        return new ExcelCellValue(value, ExcelCellType.AMOUNT);
+    }
+
+    private ExcelCellValue cellDateTime(Instant value) {
+        return new ExcelCellValue(value, ExcelCellType.DATE_TIME);
+    }
+
+    private ExcelCellValue cellDate(LocalDate value) {
+        return new ExcelCellValue(value, ExcelCellType.DATE);
+    }
+
+    private List<List<String>> buildStockFilters(Long locationId, String locationLabel) {
+        return List.of(
+                List.of("Sede", filterValue(locationLabel)),
+                List.of("Sede ID", filterValue(locationId))
+        );
+    }
+
+    private List<List<String>> buildMovementFilters(LocalDate from, LocalDate to, String type) {
+        return List.of(
+                List.of("Fecha desde", filterValue(from)),
+                List.of("Fecha hasta", filterValue(to)),
+                List.of("Tipo", filterValue(type))
+        );
+    }
+
+    private List<List<String>> buildDateRangeFilters(LocalDate from, LocalDate to) {
+        return List.of(
+                List.of("Fecha desde", filterValue(from)),
+                List.of("Fecha hasta", filterValue(to))
+        );
+    }
+
+    private List<List<String>> buildAuditFilters() {
+        return List.of(
+                List.of("Reporte", "Historial de auditoria"),
+                List.of("Filtros", "Sin filtros")
+        );
+    }
+
+    private List<List<String>> buildInventoryValuationFilters() {
+        return List.of(
+                List.of("Reporte", "Valorizacion de inventario"),
+                List.of("Filtros", "Sin filtros")
+        );
+    }
+
+    private List<List<String>> buildCountDifferencesFilters() {
+        return List.of(
+                List.of("Reporte", "Diferencias de conteo"),
+                List.of("Filtros", "Sin filtros")
+        );
+    }
+
+    private List<String> movementHeaders() {
+        return List.of("ID Movimiento", "Numero", "Tipo", "Fecha", "Ubicacion origen", "Ubicacion destino",
+                "ID Producto", "Producto", "ID Unidad", "Unidad", "Cantidad", "Cantidad base",
+                "Costo unitario", "Costo unitario base", "Lote", "Vencimiento",
+                "Referencia", "Motivo", "Estado", "Creado por");
+    }
+
+    private List<ExcelCellValue> movementRow(MovementReportDto row) {
+        return List.of(
+                cellNumber(row.getTransactionId()),
+                cellText(row.getTransactionNumber()),
+                cellText(row.getTransactionType()),
+                cellDateTime(row.getTransactionDate()),
+                cellText(row.getSourceLocation()),
+                cellText(row.getTargetLocation()),
+                cellNumber(row.getProductId()),
+                cellText(row.getProductName()),
+                cellNumber(row.getUnitId()),
+                cellText(row.getUnitCode()),
+                cellAmount(row.getQuantity()),
+                cellAmount(row.getQuantityBase()),
+                cellAmount(row.getUnitCost()),
+                cellAmount(row.getUnitCostBase()),
+                cellText(row.getLotNumber()),
+                cellDate(row.getExpirationDate()),
+                cellText(row.getReferenceText()),
+                cellText(row.getReason()),
+                cellText(row.getStatus()),
+                cellText(row.getCreatedBy())
+        );
+    }
+
+    private List<List<String>> buildShiftSummaryFilters(
+            LocalDate from,
+            LocalDate to,
+            Long userId,
+            String userLabel,
+            Long locationId,
+            String locationLabel
+    ) {
+        return List.of(
+                List.of("Fecha desde", filterValue(from)),
+                List.of("Fecha hasta", filterValue(to)),
+                List.of("Usuario", filterValue(userLabel)),
+                List.of("Usuario ID", filterValue(userId)),
+                List.of("Sede", filterValue(locationLabel)),
+                List.of("Sede ID", filterValue(locationId))
+        );
+    }
+
+    private List<List<String>> buildByUserFilters(LocalDate from, LocalDate to, Long locationId, String locationLabel) {
+        return List.of(
+                List.of("Fecha desde", filterValue(from)),
+                List.of("Fecha hasta", filterValue(to)),
+                List.of("Sede", filterValue(locationLabel)),
+                List.of("Sede ID", filterValue(locationId))
+        );
+    }
+
+    private List<List<String>> buildByLocationFilters(LocalDate from, LocalDate to, Long userId, String userLabel) {
+        return List.of(
+                List.of("Fecha desde", filterValue(from)),
+                List.of("Fecha hasta", filterValue(to)),
+                List.of("Usuario", filterValue(userLabel)),
+                List.of("Usuario ID", filterValue(userId))
+        );
+    }
+
+    private String filterValue(Object value) {
+        return value == null ? "Todos" : value.toString();
+    }
+
+    private Mono<String> resolveUserFilterLabel(Long userId) {
+        if (userId == null) {
+            return Mono.just("Todos");
+        }
+        return client.sql("SELECT COALESCE(full_name, username) AS display_name FROM app_users WHERE user_id = %d".formatted(userId))
+                .map((row, meta) -> row.get("display_name", String.class))
+                .one()
+                .defaultIfEmpty("Usuario " + userId);
+    }
+
+    private Mono<String> resolveLocationFilterLabel(Long locationId) {
+        if (locationId == null) {
+            return Mono.just("Todas");
+        }
+        return client.sql("SELECT location_name FROM locations WHERE location_id = %d".formatted(locationId))
+                .map((row, meta) -> row.get("location_name", String.class))
+                .one()
+                .defaultIfEmpty("Sede " + locationId);
+    }
+
+    private Mono<MovementAggregate> movementAggregate(String viewName, LocalDate date, Long locationId) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT
+                    COUNT(*)::int AS movements_count,
+                    COALESCE(SUM(quantity_base), 0) AS total_quantity
+                FROM %s v
+                WHERE v.transaction_date::date = '%s'
+                """.formatted(viewName, date));
+
+        if (locationId != null) {
+            sql.append(" AND (v.source_location IS NOT NULL OR v.target_location IS NOT NULL)");
+            sql.append("""
+                     AND (
+                        EXISTS (SELECT 1 FROM locations l WHERE l.location_name = v.source_location AND l.location_id = %d)
+                        OR EXISTS (SELECT 1 FROM locations l WHERE l.location_name = v.target_location AND l.location_id = %d)
+                     )
+                    """.formatted(locationId, locationId));
+        }
+
+        return client.sql(sql.toString())
+                .map((row, meta) -> new MovementAggregate(
+                        row.get("movements_count", Integer.class),
+                        valueOrZero(row.get("total_quantity", BigDecimal.class))
+                ))
+                .one()
+                .defaultIfEmpty(new MovementAggregate(0, BigDecimal.ZERO));
+    }
+
+    private Flux<DashboardTopProductDto> getTopProducts(LocalDate date, Long locationId) {
+        String saleLocationFilter = locationId == null ? "" : " AND s.location_id = %d".formatted(locationId);
+        return client.sql("""
+                SELECT
+                    si.menu_item_id,
+                    mi.menu_name,
+                    COALESCE(SUM(si.quantity), 0)::int AS quantity_sold,
+                    COALESCE(SUM(si.quantity * si.unit_price), 0) AS total_sold
+                FROM sale_items si
+                JOIN sales s ON s.sale_id = si.sale_id
+                JOIN menu_items mi ON mi.menu_item_id = si.menu_item_id
+                WHERE s.sale_datetime::date = '%s'%s
+                GROUP BY si.menu_item_id, mi.menu_name
+                ORDER BY quantity_sold DESC, total_sold DESC, mi.menu_name ASC
+                LIMIT 5
+                """.formatted(date, saleLocationFilter))
+                .map((row, meta) -> {
+                    DashboardTopProductDto dto = new DashboardTopProductDto();
+                    dto.setMenuItemId(row.get("menu_item_id", Long.class));
+                    dto.setMenuItemName(row.get("menu_name", String.class));
+                    dto.setQuantitySold(row.get("quantity_sold", Integer.class));
+                    dto.setTotalSold(valueOrZero(row.get("total_sold", BigDecimal.class)));
+                    return dto;
+                })
+                .all();
+    }
+
+    private Flux<DashboardTopUserDto> getTopUsers(LocalDate date, Long locationId) {
+        String saleLocationFilter = locationId == null ? "" : " AND s.location_id = %d".formatted(locationId);
+        return client.sql("""
+                SELECT
+                    u.user_id,
+                    u.username,
+                    u.full_name,
+                    COUNT(s.sale_id)::int AS sales_count,
+                    COALESCE(SUM(s.total_amount), 0) AS total_sold
+                FROM sales s
+                JOIN app_users u ON u.user_id = s.cashier_user_id
+                WHERE s.sale_datetime::date = '%s'%s
+                GROUP BY u.user_id, u.username, u.full_name
+                ORDER BY total_sold DESC, sales_count DESC, u.full_name ASC
+                LIMIT 5
+                """.formatted(date, saleLocationFilter))
+                .map((row, meta) -> {
+                    DashboardTopUserDto dto = new DashboardTopUserDto();
+                    dto.setUserId(row.get("user_id", Long.class));
+                    dto.setUsername(row.get("username", String.class));
+                    dto.setFullName(row.get("full_name", String.class));
+                    dto.setSalesCount(row.get("sales_count", Integer.class));
+                    dto.setTotalSold(valueOrZero(row.get("total_sold", BigDecimal.class)));
+                    return dto;
+                })
+                .all();
+    }
+
+    private Flux<DashboardHourlySalesDto> getHourlySales(LocalDate date, Long locationId) {
+        String saleLocationFilter = locationId == null ? "" : " AND location_id = %d".formatted(locationId);
+        return client.sql("""
+                SELECT
+                    EXTRACT(HOUR FROM sale_datetime)::int AS hour_of_day,
+                    COUNT(*)::int AS sales_count,
+                    COALESCE(SUM(total_amount), 0) AS total_sold
+                FROM sales
+                WHERE sale_datetime::date = '%s'%s
+                GROUP BY hour_of_day
+                ORDER BY hour_of_day ASC
+                """.formatted(date, saleLocationFilter))
+                .map((row, meta) -> {
+                    DashboardHourlySalesDto dto = new DashboardHourlySalesDto();
+                    dto.setHourOfDay(row.get("hour_of_day", Integer.class));
+                    dto.setSalesCount(row.get("sales_count", Integer.class));
+                    dto.setTotalSold(valueOrZero(row.get("total_sold", BigDecimal.class)));
+                    return dto;
+                })
+                .all();
+    }
+
+    private BigDecimal calculateAverage(BigDecimal total, Integer count) {
+        if (count == null || count == 0) {
+            return BigDecimal.ZERO;
+        }
+        return total.divide(BigDecimal.valueOf(count), 2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal valueOrZero(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private java.time.Instant toInstant(LocalDateTime dateTime) {
+        return dateTime == null ? null : dateTime.toInstant(ZoneOffset.UTC);
+    }
+
+    private enum ExcelCellType {
+        TEXT,
+        NUMBER,
+        AMOUNT,
+        DATE_TIME,
+        DATE
+    }
+
+    private record ExcelCellValue(Object value, ExcelCellType type) {
+    }
+
+    private record ExcelStyles(
+            CellStyle header,
+            CellStyle text,
+            CellStyle number,
+            CellStyle amount,
+            CellStyle dateTime,
+            CellStyle date
+    ) {
+    }
+
+    private record SalesSummary(Integer count, BigDecimal total) {
+    }
+
+    private record ShiftStatusSummary(Integer active, Integer scheduled, Integer completed) {
+    }
+
+    private record InventorySnapshot(Integer lowStockItems, BigDecimal inventoryValue) {
+    }
+
+    private record MovementAggregate(Integer count, BigDecimal quantity) {
     }
 }

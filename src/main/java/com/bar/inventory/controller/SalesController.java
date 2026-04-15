@@ -31,13 +31,13 @@ public class SalesController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO','GERENTE','BARTENDER','CAJERO')")
-    public Mono<Sale> findById(@PathVariable Long id) {
+    public Mono<Sale> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 
     @GetMapping("/{id}/items")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO','GERENTE','BARTENDER','CAJERO')")
-    public Flux<SaleItem> findItems(@PathVariable Long id) {
+    public Flux<SaleItem> findItems(@PathVariable("id") Long id) {
         return service.findItems(id);
     }
 
@@ -50,7 +50,7 @@ public class SalesController {
 
     @PostMapping("/{id}/post-inventory")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Map<String, Long>> postInventory(@PathVariable Long id, @RequestParam(value = "userId", required = false) Long userId) {
+    public Mono<Map<String, Long>> postInventory(@PathVariable("id") Long id, @RequestParam(value = "userId", required = false) Long userId) {
         return service.postToInventory(id, userId).map(txnId -> Map.of("transactionId", txnId));
     }
 }

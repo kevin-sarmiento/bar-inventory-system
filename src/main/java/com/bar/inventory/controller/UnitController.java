@@ -28,7 +28,7 @@ public class UnitController {
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<UnitOfMeasure> findById(@PathVariable Long id) {
+    public Mono<UnitOfMeasure> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 
@@ -41,14 +41,14 @@ public class UnitController {
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<UnitOfMeasure> update(@PathVariable Long id, @Valid @RequestBody UnitOfMeasure unit) {
+    public Mono<UnitOfMeasure> update(@PathVariable("id") Long id, @Valid @RequestBody UnitOfMeasure unit) {
         return service.update(id, unit);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Void> delete(@PathVariable Long id) {
+    public Mono<Void> delete(@PathVariable("id") Long id) {
         return service.delete(id);
     }
 }

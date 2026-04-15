@@ -2,6 +2,7 @@ package com.bar.inventory.service;
 
 import com.bar.inventory.dto.CreatePhysicalCountItemRequest;
 import com.bar.inventory.dto.CreatePhysicalCountRequest;
+import com.bar.inventory.model.PhysicalCount;
 import com.bar.inventory.repository.PhysicalCountItemRepository;
 import com.bar.inventory.repository.PhysicalCountRepository;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PhysicalCountServiceTest {
@@ -42,6 +44,29 @@ class PhysicalCountServiceTest {
         StepVerifier.create(service.closeCount(1L, 0L))
                 .expectError(IllegalArgumentException.class)
                 .verify();
+    }
+
+    @Test
+    void closeCountShouldRejectWhenCountIsNotDraft() {
+        PhysicalCountService service = new PhysicalCountService(physicalCountRepository, physicalCountItemRepository, databaseClient);
+        PhysicalCount count = new PhysicalCount();
+        count.setId(1L);
+        count.setStatus("CLOSED");
+        when(physicalCountRepository.findById(1L)).thenReturn(reactor.core.publisher.Mono.just(count));
+
+        StepVerifier.create(service.closeCount(1L, 1L))
+                .expectError(IllegalStateException.class)
+                .verify();
+    }
+
+    @Test
+    void createCountShouldRejectMissingCountNumber() {
+        PhysicalCountService service = new PhysicalCountService(physicalCountRepository, physicalCountItemRepository, databaseClient);
+        CreatePhysicalCountRequest request = validRequestWithDuplicateProducts();
+        request.setItems(List.of(request.getItems().get(0)));
+        request.setCountNumber(" ");
+
+        assertThrows(IllegalArgumentException.class, () -> service.createCount(request));
     }
 
     private CreatePhysicalCountRequest validRequestWithDuplicateProducts() {

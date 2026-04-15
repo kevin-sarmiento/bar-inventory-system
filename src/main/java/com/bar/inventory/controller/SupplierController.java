@@ -28,7 +28,7 @@ public class SupplierController {
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<Supplier> findById(@PathVariable Long id) {
+    public Mono<Supplier> findById(@PathVariable("id") Long id) {
         return service.findById(id);
     }
 
@@ -41,14 +41,14 @@ public class SupplierController {
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Supplier> update(@PathVariable Long id, @Valid @RequestBody Supplier supplier) {
+    public Mono<Supplier> update(@PathVariable("id") Long id, @Valid @RequestBody Supplier supplier) {
         return service.update(id, supplier);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Void> delete(@PathVariable Long id) {
+    public Mono<Void> delete(@PathVariable("id") Long id) {
         return service.delete(id);
     }
 }

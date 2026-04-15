@@ -28,7 +28,7 @@ public class RecipeController {
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<Recipe> findById(@PathVariable Long id) {
+    public Mono<Recipe> findById(@PathVariable("id") Long id) {
         return service.findRecipeById(id);
     }
 
@@ -41,34 +41,34 @@ public class RecipeController {
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Recipe> update(@PathVariable Long id, @Valid @RequestBody Recipe recipe) {
+    public Mono<Recipe> update(@PathVariable("id") Long id, @Valid @RequestBody Recipe recipe) {
         return service.updateRecipe(id, recipe);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Void> delete(@PathVariable Long id) {
+    public Mono<Void> delete(@PathVariable("id") Long id) {
         return service.deleteRecipe(id);
     }
 
     @GetMapping("/{id}/items")
     @PreAuthorize("isAuthenticated()")
-    public Flux<RecipeItem> findItems(@PathVariable Long id) {
+    public Flux<RecipeItem> findItems(@PathVariable("id") Long id) {
         return service.findItemsByRecipeId(id);
     }
 
     @PostMapping(path = "/{id}/items", consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<RecipeItem> addItem(@PathVariable Long id, @Valid @RequestBody RecipeItem recipeItem) {
+    public Mono<RecipeItem> addItem(@PathVariable("id") Long id, @Valid @RequestBody RecipeItem recipeItem) {
         return service.addRecipeItem(id, recipeItem);
     }
 
     @DeleteMapping("/items/{itemId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
-    public Mono<Void> deleteItem(@PathVariable Long itemId) {
+    public Mono<Void> deleteItem(@PathVariable("itemId") Long itemId) {
         return service.deleteRecipeItem(itemId);
     }
 }

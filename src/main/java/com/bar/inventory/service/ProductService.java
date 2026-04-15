@@ -2,6 +2,7 @@ package com.bar.inventory.service;
 
 import com.bar.inventory.model.Product;
 import com.bar.inventory.repository.ProductRepository;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -10,9 +11,11 @@ import reactor.core.publisher.Mono;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final DatabaseClient databaseClient;
 
-    public ProductService(ProductRepository productRepository) {
+    public ProductService(ProductRepository productRepository, DatabaseClient databaseClient) {
         this.productRepository = productRepository;
+        this.databaseClient = databaseClient;
     }
 
     public Flux<Product> findAll() {
@@ -25,7 +28,17 @@ public class ProductService {
 
     public Mono<Product> create(Product product) {
         product.setId(null);
-        return productRepository.save(product);
+        return productRepository.save(product)
+                .flatMap(saved -> databaseClient.sql("""
+                                INSERT INTO product_units (
+                                    product_id, unit_id, factor_to_base,
+                                    is_purchase_unit, is_consumption_unit, is_default_unit
+                                ) VALUES (%d, %d, 1, TRUE, TRUE, TRUE)
+                                ON CONFLICT (product_id, unit_id) DO NOTHING
+                                """.formatted(saved.getId(), saved.getBaseUnitId()))
+                        .fetch()
+                        .rowsUpdated()
+                        .thenReturn(saved));
     }
 
     public Mono<Product> update(Long id, Product product) {
