@@ -31,8 +31,11 @@ public class MenuService {
         return repository.findById(id)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Item de menu no encontrado")))
                 .flatMap(existing -> {
-                    menuItem.setId(id);
-                    return repository.save(menuItem);
+                    existing.setMenuName(menuItem.getMenuName());
+                    existing.setRecipeId(menuItem.getRecipeId());
+                    existing.setSalePrice(menuItem.getSalePrice());
+                    existing.setActive(menuItem.getActive());
+                    return repository.save(existing);
                 });
     }
 
