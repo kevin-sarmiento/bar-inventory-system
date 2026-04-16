@@ -31,8 +31,11 @@ public class LocationService {
         return repository.findById(id)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Ubicacion no encontrada")))
                 .flatMap(existing -> {
-                    location.setId(id);
-                    return repository.save(location);
+                    existing.setLocationName(location.getLocationName());
+                    existing.setLocationType(location.getLocationType());
+                    existing.setDescription(location.getDescription());
+                    existing.setActive(location.getActive());
+                    return repository.save(existing);
                 });
     }
 

@@ -45,8 +45,15 @@ public class ProductService {
         return productRepository.findById(id)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Producto no encontrado")))
                 .flatMap(existing -> {
-                    product.setId(id);
-                    return productRepository.save(product);
+                    existing.setSku(product.getSku());
+                    existing.setName(product.getName());
+                    existing.setCategoryId(product.getCategoryId());
+                    existing.setBaseUnitId(product.getBaseUnitId());
+                    existing.setMinStockBaseQty(product.getMinStockBaseQty());
+                    existing.setBarcode(product.getBarcode());
+                    existing.setActive(product.getActive());
+                    existing.setNotes(product.getNotes());
+                    return productRepository.save(existing);
                 });
     }
 
