@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 
 @RestController
@@ -137,14 +138,18 @@ public class ReportController {
 
     @GetMapping("/audit")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','GERENTE')")
-    public Flux<AuditHistoryDto> auditHistory() {
-        return reportService.getAuditHistory();
+    public Flux<AuditHistoryDto> auditHistory(
+            @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return reportService.getAuditHistory(from, to);
     }
 
     @GetMapping(value = "/audit/export.xlsx", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','GERENTE')")
-    public Mono<ResponseEntity<byte[]>> exportAuditHistoryXlsx() {
-        return reportService.exportAuditHistoryXlsx()
+    public Mono<ResponseEntity<byte[]>> exportAuditHistoryXlsx(
+            @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return reportService.exportAuditHistoryXlsx(from, to)
                 .map(content -> xlsxResponse("audit-history.xlsx", content));
     }
 
@@ -176,42 +181,42 @@ public class ReportController {
         return reportService.getShiftSalesByLocation(from, to, userId);
     }
 
-    @GetMapping(value = "/shifts/export", produces = "text/csv")
+    @GetMapping(value = "/shifts/export", produces = "text/csv;charset=UTF-8")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','GERENTE')")
-    public Mono<ResponseEntity<String>> exportShiftSummary(
+    public Mono<ResponseEntity<byte[]>> exportShiftSummary(
             @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "userId", required = false) Long userId,
             @RequestParam(value = "locationId", required = false) Long locationId) {
         return reportService.exportShiftSummaryCsv(from, to, userId, locationId)
-                .map(csv -> csvResponse("shift-summary.csv", csv));
+                .map(csv -> csvBytesResponse("shift-summary.csv", csv));
     }
 
-    @GetMapping(value = "/shifts/by-user/export", produces = "text/csv")
+    @GetMapping(value = "/shifts/by-user/export", produces = "text/csv;charset=UTF-8")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','GERENTE')")
-    public Mono<ResponseEntity<String>> exportShiftSalesByUser(
+    public Mono<ResponseEntity<byte[]>> exportShiftSalesByUser(
             @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "locationId", required = false) Long locationId) {
         return reportService.exportShiftSalesByUserCsv(from, to, locationId)
-                .map(csv -> csvResponse("shift-sales-by-user.csv", csv));
+                .map(csv -> csvBytesResponse("shift-sales-by-user.csv", csv));
     }
 
-    @GetMapping(value = "/shifts/by-location/export", produces = "text/csv")
+    @GetMapping(value = "/shifts/by-location/export", produces = "text/csv;charset=UTF-8")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR','GERENTE')")
-    public Mono<ResponseEntity<String>> exportShiftSalesByLocation(
+    public Mono<ResponseEntity<byte[]>> exportShiftSalesByLocation(
             @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(value = "userId", required = false) Long userId) {
         return reportService.exportShiftSalesByLocationCsv(from, to, userId)
-                .map(csv -> csvResponse("shift-sales-by-location.csv", csv));
+                .map(csv -> csvBytesResponse("shift-sales-by-location.csv", csv));
     }
 
-    private ResponseEntity<String> csvResponse(String filename, String csv) {
+    private ResponseEntity<byte[]> csvBytesResponse(String filename, String csv) {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(MediaType.parseMediaType("text/csv"))
-                .body(csv);
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .body(csv.getBytes(StandardCharsets.UTF_8));
     }
 
     @GetMapping(value = "/shifts/export.xlsx", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

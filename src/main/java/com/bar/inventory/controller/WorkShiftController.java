@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
@@ -34,16 +35,22 @@ public class WorkShiftController {
         return workShiftService.findAll();
     }
 
-    @GetMapping("/{id}")
-    @PreAuthorize("isAuthenticated()")
-    public Mono<ShiftDto> findById(@PathVariable("id") Long id) {
-        return workShiftService.findById(id);
-    }
-
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     public Flux<ShiftDto> findMine() {
         return workShiftService.findMyShifts();
+    }
+
+    @GetMapping("/for-sale")
+    @PreAuthorize("isAuthenticated()")
+    public Flux<ShiftDto> forSale(@RequestParam("locationId") Long locationId) {
+        return workShiftService.findShiftsEligibleForSale(locationId);
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public Mono<ShiftDto> findById(@PathVariable("id") Long id) {
+        return workShiftService.findById(id);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)

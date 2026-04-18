@@ -48,8 +48,8 @@ export class ReportApiService {
     return this.http.get<InventoryValuationDto[]>(this.url('/inventory-valuation'));
   }
 
-  getAuditHistory() {
-    return this.http.get<AuditHistoryDto[]>(this.url('/audit'));
+  getAuditHistory(from?: string, to?: string) {
+    return this.http.get<AuditHistoryDto[]>(this.url('/audit'), { params: this.params({ from, to }) });
   }
 
   getShiftSummary(from?: string, to?: string, userId?: number, locationId?: number) {

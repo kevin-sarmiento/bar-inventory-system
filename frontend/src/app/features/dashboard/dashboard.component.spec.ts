@@ -23,14 +23,14 @@ describe('DashboardComponent', () => {
     }).compileComponents();
   });
 
-  it('carga el resumen diario y actualiza las tarjetas del panel', () => {
+  it('carga el resumen diario en la seccion principal', () => {
     const fixture = TestBed.createComponent(DashboardComponent);
     fixture.detectChanges();
 
     const component = fixture.componentInstance as any;
     expect(reportsApi.getDailyDashboard).toHaveBeenCalled();
     expect(component.summary()?.salesCount).toBe(14);
-    expect(fixture.nativeElement.textContent).toContain('Ventas del dia');
+    expect(fixture.nativeElement.textContent).toContain('Resumen del dia');
     expect(fixture.nativeElement.textContent).toContain('Existencias bajas');
   });
 });

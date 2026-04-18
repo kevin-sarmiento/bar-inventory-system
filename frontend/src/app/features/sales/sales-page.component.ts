@@ -4,14 +4,22 @@ import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { forkJoin } from 'rxjs';
 import { DataColumn } from '../../core/models/api.models';
 import { Location, MenuItem, Product, Unit } from '../../core/models/catalog.models';
-import { CreateSalePayload, Sale } from '../../core/models/operations.models';
+import { CreateSalePayload, Sale, ShiftDto } from '../../core/models/operations.models';
 import { AuthService } from '../../core/services/auth.service';
 import { LocationApiService, MenuApiService, ProductApiService, UnitApiService } from '../../core/services/catalog-api.service';
-import { SalesApiService } from '../../core/services/operations-api.service';
+import { SalesApiService, ShiftApiService } from '../../core/services/operations-api.service';
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
+import { saleStatusEs, shiftStatusEs } from '../../shared/i18n/operations-labels';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
 
 type SaleStatusOption = { value: string; label: string };
+
+type SaleRow = Sale & {
+  displayStatus: string;
+  ubicacion: string;
+  cajero: string;
+  registradoPor: string;
+};
 
 @Component({
   selector: 'app-sales-page',
@@ -23,31 +31,33 @@ type SaleStatusOption = { value: string; label: string };
         <div>
           <span class="chip">Fase 3</span>
           <h2 class="section-title">Ventas</h2>
-          <p class="section-subtitle">Registra ventas y procesa inventario segun tu rol.</p>
+          <p class="section-subtitle">Registro y procesamiento de inventario.</p>
         </div>
       </header>
 
       <form *ngIf="canCreate()" class="shell-card form-card" [formGroup]="form" (ngSubmit)="save()">
         <div class="form-grid three-cols">
-          <div class="field"><label>Numero de venta</label><input class="input" formControlName="saleNumber"></div>
-          <div class="field"><label>Fecha</label><input type="datetime-local" class="input" formControlName="saleDatetime"></div>
           <div class="field">
             <label>Ubicacion</label>
             <select class="select" formControlName="locationId">
               <option *ngFor="let item of locations()" [ngValue]="item.id">{{ item.locationName }}</option>
             </select>
           </div>
-          <div class="field"><label>Usuario de caja</label><input type="number" class="input" formControlName="cashierUserId"></div>
-          <div class="field"><label>ID del turno</label><input type="number" class="input" formControlName="shiftId"></div>
+          <div class="field">
+            <label>Turno (opcional)</label>
+            <select class="select" formControlName="shiftId">
+              <option [ngValue]="null">Sin turno</option>
+              <option *ngFor="let sh of shiftsForSale()" [ngValue]="sh.id">{{ shiftLabel(sh) }}</option>
+            </select>
+          </div>
           <div class="field">
             <label>Estado</label>
             <select class="select" formControlName="status">
               <option *ngFor="let item of statuses" [value]="item.value">{{ item.label }}</option>
             </select>
           </div>
-          <div class="field"><label>Total</label><input type="number" class="input" formControlName="totalAmount"></div>
           <div class="field">
-            <label>Procesar inventario</label>
+            <label>Procesar inventario al crear</label>
             <select class="select" formControlName="processInventory">
               <option [ngValue]="true">Si</option>
               <option [ngValue]="false">No</option>
@@ -59,21 +69,21 @@ type SaleStatusOption = { value: string; label: string };
           <article class="shell-card item-card" *ngFor="let group of items.controls; index as i" [formGroupName]="i">
             <div class="form-grid four-cols">
               <div class="field">
-                <label>ID del menu</label>
+                <label>Carta / menu</label>
                 <select class="select" formControlName="menuItemId">
                   <option [ngValue]="null">Sin menu</option>
                   <option *ngFor="let item of menuItems()" [ngValue]="item.id">{{ item.menuName }}</option>
                 </select>
               </div>
               <div class="field">
-                <label>ID del producto</label>
+                <label>Producto directo</label>
                 <select class="select" formControlName="productId">
                   <option [ngValue]="null">Sin producto</option>
                   <option *ngFor="let item of products()" [ngValue]="item.id">{{ item.name }}</option>
                 </select>
               </div>
               <div class="field">
-                <label>ID de la unidad</label>
+                <label>Unidad</label>
                 <select class="select" formControlName="unitId">
                   <option [ngValue]="null">Sin unidad</option>
                   <option *ngFor="let item of units()" [ngValue]="item.id">{{ item.name }}</option>
@@ -92,31 +102,40 @@ type SaleStatusOption = { value: string; label: string };
         </div>
       </form>
 
-      <p *ngIf="!canCreate()" class="section-subtitle">
-        Tu perfil puede consultar ventas. El procesamiento de inventario depende de los permisos operativos.
-      </p>
-
+      <h3 class="subsection-title">Ventas pendientes y otras</h3>
       <app-data-table
-        [rows]="rows()"
+        [rows]="openRows()"
         [columns]="columns"
         [showActions]="canPostInventory()"
         [editLabel]="'Procesar'"
         [hideRemoveAction]="true"
-        [emptyTitle]="'Sin ventas registradas'"
-        [emptyDescription]="'Cuando existan ventas apareceran aqui.'"
+        [emptyTitle]="'Sin ventas en esta lista'"
+        [emptyDescription]="''"
         (edit)="postInventory($event)"
-        (remove)="noop($event)"
       />
 
-      <p *ngIf="canPostInventory()" class="section-subtitle">Editar envia la venta a inventario. Eliminar no se usa en esta pantalla.</p>
+      <h3 class="subsection-title">Ventas pagadas</h3>
+      <app-data-table
+        [rows]="paidRows()"
+        [columns]="columns"
+        [showActions]="canPostInventory()"
+        [editLabel]="'Procesar'"
+        [hideRemoveAction]="true"
+        [emptyTitle]="'Sin ventas pagadas'"
+        [emptyDescription]="''"
+        (edit)="postInventory($event)"
+      />
     </section>
   `,
-  styles: [`.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.four-cols{grid-template-columns:repeat(4,minmax(0,1fr))}.items-grid{display:grid;gap:1rem}.item-card{padding:1rem;display:grid;gap:1rem}.actions{display:flex;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}@media (max-width:900px){.three-cols,.four-cols{grid-template-columns:1fr}}`],
+  styles: [
+    `.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.four-cols{grid-template-columns:repeat(4,minmax(0,1fr))}.items-grid{display:grid;gap:1rem}.item-card{padding:1rem;display:grid;gap:1rem}.actions{display:flex;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}.subsection-title{margin:1.25rem 0 0.5rem;font-family:'Sora',sans-serif;font-size:1.05rem}@media (max-width:900px){.three-cols,.four-cols{grid-template-columns:1fr}}`
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class SalesPageComponent implements OnInit {
+  protected readonly auth = inject(AuthService);
   private readonly api = inject(SalesApiService);
-  private readonly auth = inject(AuthService);
+  private readonly shiftApi = inject(ShiftApiService);
   private readonly locationsApi = inject(LocationApiService);
   private readonly menuApi = inject(MenuApiService);
   private readonly productsApi = inject(ProductApiService);
@@ -124,33 +143,36 @@ export class SalesPageComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly feedback = inject(UiFeedbackService);
 
-  protected readonly canCreate = computed(() => this.auth.hasAnyRole(['ADMINISTRADOR', 'CAJERO', 'BARTENDER']));
-  protected readonly canPostInventory = computed(() => this.auth.hasAnyRole(['ADMINISTRADOR', 'INVENTARIO']));
-  protected readonly rows = signal<Sale[]>([]);
+  protected readonly canCreate = computed(() =>
+    this.auth.hasAnyRole(['ADMINISTRADOR', 'CAJERO', 'BARTENDER', 'GERENTE'])
+  );
+  protected readonly canPostInventory = computed(() => this.auth.hasAnyRole(['ADMINISTRADOR', 'INVENTARIO', 'GERENTE']));
+  protected readonly rows = signal<SaleRow[]>([]);
+  protected readonly shiftsForSale = signal<ShiftDto[]>([]);
+  protected readonly openRows = computed(() => this.rows().filter((r) => r.status !== 'PAID'));
+  protected readonly paidRows = computed(() => this.rows().filter((r) => r.status === 'PAID'));
   protected readonly locations = signal<Location[]>([]);
   protected readonly menuItems = signal<MenuItem[]>([]);
   protected readonly products = signal<Product[]>([]);
   protected readonly units = signal<Unit[]>([]);
   protected readonly statuses: SaleStatusOption[] = [
-    { value: 'PAID', label: 'Pagada' },
     { value: 'OPEN', label: 'Abierta' },
+    { value: 'PAID', label: 'Pagada' },
     { value: 'CANCELLED', label: 'Cancelada' }
   ];
-  protected readonly columns: DataColumn<Sale>[] = [
+  protected readonly columns: DataColumn<SaleRow>[] = [
     { key: 'saleNumber', label: 'Numero' },
     { key: 'saleDatetime', label: 'Fecha' },
-    { key: 'locationId', label: 'Ubicacion' },
+    { key: 'ubicacion', label: 'Ubicacion' },
+    { key: 'cajero', label: 'Cajero' },
+    { key: 'registradoPor', label: 'Registro' },
     { key: 'totalAmount', label: 'Total', type: 'currency' },
-    { key: 'status', label: 'Estado', type: 'badge' },
+    { key: 'displayStatus', label: 'Estado', type: 'badge' },
     { key: 'inventoryProcessed', label: 'Inventario procesado', type: 'boolean' }
   ];
   protected readonly form = this.fb.group({
-    saleNumber: ['', Validators.required],
-    saleDatetime: ['', Validators.required],
     locationId: [0, Validators.required],
-    cashierUserId: [1, Validators.required],
     shiftId: [null as number | null],
-    totalAmount: [0, Validators.required],
     status: ['PAID'],
     processInventory: [false],
     items: this.fb.array([])
@@ -163,8 +185,19 @@ export class SalesPageComponent implements OnInit {
   ngOnInit(): void {
     if (this.canCreate()) {
       this.addItem();
+      this.form.get('locationId')!.valueChanges.subscribe((lid) => {
+        this.form.patchValue({ shiftId: null }, { emitEvent: false });
+        this.loadShiftsForLocation(lid);
+      });
     }
     this.load();
+  }
+
+  protected shiftLabel(sh: ShiftDto): string {
+    const inicio = sh.scheduledStart.replace('T', ' ').slice(0, 16);
+    const persona = sh.fullName || sh.username || '';
+    const quien = persona ? `${persona} · ` : '';
+    return `#${sh.id} · ${quien}${inicio} · ${shiftStatusEs(sh.status)}`;
   }
 
   protected addItem(): void {
@@ -187,12 +220,37 @@ export class SalesPageComponent implements OnInit {
   }
 
   protected save(): void {
+    const uid = this.auth.userId();
+    if (uid == null) {
+      this.feedback.error('Sesion', 'No se pudo determinar el usuario. Vuelve a iniciar sesion.');
+      return;
+    }
     const raw = this.form.getRawValue();
+    const items = raw.items as {
+      menuItemId: number | null;
+      productId: number | null;
+      unitId: number | null;
+      quantity: number;
+      unitPrice: number;
+    }[];
+    const totalAmount = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+    const shiftId = raw.shiftId != null && raw.shiftId > 0 ? raw.shiftId : null;
+    let cashierUserId = uid;
+    if (shiftId != null) {
+      const sh = this.shiftsForSale().find((s) => s.id === shiftId);
+      if (sh) {
+        cashierUserId = sh.userId;
+      }
+    }
     const payload: CreateSalePayload = {
-      ...raw,
-      saleDatetime: new Date(raw.saleDatetime!).toISOString(),
-      items: raw.items as any
-    } as CreateSalePayload;
+      locationId: raw.locationId!,
+      cashierUserId,
+      shiftId,
+      totalAmount,
+      status: raw.status ?? 'PAID',
+      processInventory: !!raw.processInventory,
+      items
+    };
 
     this.api.create(payload).subscribe({
       next: () => {
@@ -203,7 +261,15 @@ export class SalesPageComponent implements OnInit {
   }
 
   protected postInventory(row: Sale): void {
-    this.api.postInventory(row.id, row.cashierUserId).subscribe({
+    if (row.status !== 'PAID') {
+      this.feedback.error('Inventario', 'Solo las ventas pagadas pueden procesarse.');
+      return;
+    }
+    if (row.inventoryProcessed) {
+      this.feedback.error('Inventario', 'Esta venta ya fue procesada.');
+      return;
+    }
+    this.api.postInventory(row.id).subscribe({
       next: () => {
         this.feedback.success('Inventario procesado', 'La venta fue enviada a inventario.');
         this.loadRows();
@@ -211,7 +277,27 @@ export class SalesPageComponent implements OnInit {
     });
   }
 
-  protected noop(_: unknown): void {}
+  private loadShiftsForLocation(locationId: number | null | undefined): void {
+    if (!locationId || !this.canCreate()) {
+      this.shiftsForSale.set([]);
+      return;
+    }
+    this.shiftApi.forSale(locationId).subscribe({
+      next: (list) => this.shiftsForSale.set(list),
+      error: () => this.shiftsForSale.set([])
+    });
+  }
+
+  private toRows(raw: Sale[]): SaleRow[] {
+    return raw.map((r) => ({
+      ...r,
+      displayStatus: saleStatusEs(r.status),
+      ubicacion: r.locationName ?? `#${r.locationId}`,
+      cajero: r.cashierFullName || r.cashierUsername || `#${r.cashierUserId}`,
+      registradoPor:
+        r.createdByFullName || r.createdByUsername || (r.createdBy != null ? `#${r.createdBy}` : '—')
+    }));
+  }
 
   private load(): void {
     forkJoin([
@@ -221,15 +307,25 @@ export class SalesPageComponent implements OnInit {
       this.productsApi.list(),
       this.unitsApi.list()
     ]).subscribe(([rows, locations, menuItems, products, units]) => {
-      this.rows.set(rows);
+      this.rows.set(this.toRows(rows));
       this.locations.set(locations);
       this.menuItems.set(menuItems);
       this.products.set(products);
       this.units.set(units);
+      const lid = this.form.getRawValue().locationId;
+      if (lid && this.canCreate()) {
+        this.loadShiftsForLocation(lid);
+      }
     });
   }
 
   private loadRows(): void {
-    this.api.list().subscribe((rows) => this.rows.set(rows));
+    this.api.list().subscribe((rows) => {
+      this.rows.set(this.toRows(rows));
+      const lid = this.form.getRawValue().locationId;
+      if (lid && this.canCreate()) {
+        this.loadShiftsForLocation(lid);
+      }
+    });
   }
 }

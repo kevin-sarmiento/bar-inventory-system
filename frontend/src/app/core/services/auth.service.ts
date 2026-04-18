@@ -20,6 +20,7 @@ export class AuthService {
   readonly currentUser = this.currentUserSignal.asReadonly();
   readonly isAuthenticated = computed(() => !!this.currentUserSignal());
   readonly roles = computed(() => this.currentUserSignal()?.roles ?? []);
+  readonly userId = computed(() => this.currentUserSignal()?.userId ?? null);
 
   login(payload: AuthRequest): Observable<AuthResponse> {
     const endpoint = `${API_CONFIG.endpoints.auth}/login`;

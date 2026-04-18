@@ -9,7 +9,10 @@ import { AuthService } from '../../core/services/auth.service';
 import { LocationApiService, ProductApiService, SupplierApiService, UnitApiService } from '../../core/services/catalog-api.service';
 import { TransactionApiService } from '../../core/services/operations-api.service';
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
+import { inventoryTransactionStatusEs, inventoryTransactionTypeEs } from '../../shared/i18n/operations-labels';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
+
+type TxRow = InventoryTransaction & { displayType: string; displayStatus: string };
 
 type TransactionTypeOption = { value: string; label: string };
 type TransactionStatusOption = { value: string; label: string };
@@ -24,7 +27,7 @@ type TransactionStatusOption = { value: string; label: string };
         <div>
           <span class="chip">Fase 2</span>
           <h2 class="section-title">Transacciones de inventario</h2>
-          <p class="section-subtitle">Consulta movimientos y cambia estado segun tu perfil.</p>
+          <p class="section-subtitle">Movimientos y aprobacion segun rol.</p>
         </div>
       </header>
 
@@ -37,7 +40,10 @@ type TransactionStatusOption = { value: string; label: string };
               <option *ngFor="let type of types" [value]="type.value">{{ type.label }}</option>
             </select>
           </div>
-          <div class="field"><label>Fecha</label><input class="input" type="datetime-local" formControlName="transactionDate"></div>
+          <div class="field">
+            <label>Fecha y hora</label>
+            <input class="input input-readonly" type="text" readonly tabindex="-1" [value]="transactionDateLabel()" />
+          </div>
           <div class="field">
             <label>Origen</label>
             <select class="select" formControlName="sourceLocationId">
@@ -65,7 +71,6 @@ type TransactionStatusOption = { value: string; label: string };
               <option *ngFor="let item of statuses" [value]="item.value">{{ item.label }}</option>
             </select>
           </div>
-          <div class="field"><label>Creado por</label><input type="number" class="input" formControlName="createdBy"></div>
           <div class="field"><label>Referencia</label><input class="input" formControlName="referenceText"></div>
         </div>
 
@@ -101,26 +106,36 @@ type TransactionStatusOption = { value: string; label: string };
         </div>
       </form>
 
-      <p *ngIf="!canCreate()" class="section-subtitle">
-        Tu perfil puede consultar movimientos. El cambio de estado depende de tu rol.
-      </p>
+      <div class="toolbar shell-card">
+        <div class="field field-grow">
+          <label for="txn-search">Buscar</label>
+          <input
+            id="txn-search"
+            class="input"
+            type="search"
+            placeholder="Numero, tipo, estado, referencia..."
+            [value]="searchQuery()"
+            (input)="searchQuery.set($any($event.target).value)"
+          />
+        </div>
+      </div>
 
       <app-data-table
-        [rows]="rows()"
+        [rows]="filteredRows()"
         [columns]="columns"
         [showActions]="canUpdateStatus()"
         [editLabel]="'Publicar'"
         [removeLabel]="'Cancelar'"
         [emptyTitle]="'Sin transacciones registradas'"
-        [emptyDescription]="'Cuando existan movimientos apareceran aqui.'"
+        [emptyDescription]="''"
         (edit)="markPosted($event)"
         (remove)="markCancelled($event)"
       />
-
-      <p *ngIf="canUpdateStatus()" class="section-subtitle">Editar publica la transaccion. Eliminar la marca como cancelada.</p>
     </section>
   `,
-  styles: [`.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.items-grid{display:grid;gap:1rem}.item-card{padding:1rem;display:grid;gap:1rem}.actions{display:flex;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`],
+  styles: [
+    `.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.input-readonly{background:var(--color-surface-muted, rgba(41,50,65,.06));cursor:not-allowed}.items-grid{display:grid;gap:1rem}.item-card{padding:1rem;display:grid;gap:1rem}.actions{display:flex;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}.toolbar{padding:1rem;display:flex;gap:1rem;align-items:flex-end}.field-grow{flex:1;min-width:12rem}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class TransactionsPageComponent implements OnInit {
@@ -135,7 +150,32 @@ export class TransactionsPageComponent implements OnInit {
 
   protected readonly canCreate = computed(() => this.auth.hasAnyRole(['ADMINISTRADOR', 'INVENTARIO']));
   protected readonly canUpdateStatus = computed(() => this.auth.hasAnyRole(['ADMINISTRADOR', 'GERENTE']));
-  protected readonly rows = signal<InventoryTransaction[]>([]);
+  protected readonly rows = signal<TxRow[]>([]);
+  /** Solo informativo en UI; el servidor asigna la fecha real al crear. */
+  protected readonly transactionDateLabel = signal('');
+  protected readonly searchQuery = signal('');
+  protected readonly filteredRows = computed(() => {
+    const q = this.searchQuery().trim().toLowerCase();
+    const list = this.rows();
+    if (!q) {
+      return list;
+    }
+    return list.filter((r) => {
+      const blob = [
+        r.transactionNumber,
+        r.referenceText,
+        r.transactionType,
+        r.displayType,
+        r.status,
+        r.displayStatus,
+        r.reason
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  });
   protected readonly locations = signal<Location[]>([]);
   protected readonly suppliers = signal<Supplier[]>([]);
   protected readonly products = signal<Product[]>([]);
@@ -157,24 +197,22 @@ export class TransactionsPageComponent implements OnInit {
     { value: 'POSTED', label: 'Publicado' },
     { value: 'CANCELLED', label: 'Cancelado' }
   ];
-  protected readonly columns: DataColumn<InventoryTransaction>[] = [
+  protected readonly columns: DataColumn<TxRow>[] = [
     { key: 'transactionNumber', label: 'Numero' },
-    { key: 'transactionType', label: 'Tipo', type: 'badge' },
+    { key: 'displayType', label: 'Tipo', type: 'badge' },
     { key: 'transactionDate', label: 'Fecha' },
-    { key: 'status', label: 'Estado', type: 'badge' },
+    { key: 'displayStatus', label: 'Estado', type: 'badge' },
     { key: 'referenceText', label: 'Referencia' }
   ];
   protected readonly form = this.fb.group({
     transactionNumber: ['', Validators.required],
     transactionType: ['PURCHASE', Validators.required],
-    transactionDate: ['', Validators.required],
     sourceLocationId: [null as number | null],
     targetLocationId: [null as number | null],
     supplierId: [null as number | null],
     referenceText: [''],
     reason: [''],
     status: ['POSTED'],
-    createdBy: [1],
     items: this.fb.array([])
   });
 
@@ -185,8 +223,15 @@ export class TransactionsPageComponent implements OnInit {
   ngOnInit(): void {
     if (this.canCreate()) {
       this.addItem();
+      this.refreshTransactionDateLabel();
     }
     this.load();
+  }
+
+  private refreshTransactionDateLabel(): void {
+    this.transactionDateLabel.set(
+      new Intl.DateTimeFormat('es-CO', { dateStyle: 'short', timeStyle: 'short' }).format(new Date())
+    );
   }
 
   protected addItem(): void {
@@ -211,10 +256,13 @@ export class TransactionsPageComponent implements OnInit {
   }
 
   protected save(): void {
+    const uid = this.auth.userId();
     const raw = this.form.getRawValue();
+    this.refreshTransactionDateLabel();
     const payload: CreateTransactionPayload = {
       ...raw,
-      transactionDate: new Date(raw.transactionDate!).toISOString(),
+      transactionDate: new Date().toISOString(),
+      createdBy: uid ?? undefined,
       items: raw.items!.map((item: any) => ({
         ...item,
         expirationDate: item.expirationDate || null,
@@ -249,6 +297,14 @@ export class TransactionsPageComponent implements OnInit {
     });
   }
 
+  private toRows(raw: InventoryTransaction[]): TxRow[] {
+    return raw.map((r) => ({
+      ...r,
+      displayType: inventoryTransactionTypeEs(r.transactionType),
+      displayStatus: inventoryTransactionStatusEs(r.status)
+    }));
+  }
+
   private load(): void {
     forkJoin([
       this.api.list(),
@@ -257,7 +313,7 @@ export class TransactionsPageComponent implements OnInit {
       this.productsApi.list(),
       this.unitsApi.list()
     ]).subscribe(([rows, locations, suppliers, products, units]) => {
-      this.rows.set(rows);
+      this.rows.set(this.toRows(rows));
       this.locations.set(locations);
       this.suppliers.set(suppliers);
       this.products.set(products);
@@ -266,6 +322,6 @@ export class TransactionsPageComponent implements OnInit {
   }
 
   private loadRows(): void {
-    this.api.list().subscribe((rows) => this.rows.set(rows));
+    this.api.list().subscribe((rows) => this.rows.set(this.toRows(rows)));
   }
 }

@@ -34,6 +34,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -220,20 +221,38 @@ public class ReportService {
                 }).all();
     }
 
-    public Flux<AuditHistoryDto> getAuditHistory() {
-        return client.sql("SELECT * FROM vw_audit_history ORDER BY changed_at DESC")
+    public Flux<AuditHistoryDto> getAuditHistory(LocalDate from, LocalDate to) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT
+                    audit_id,
+                    table_name,
+                    record_pk,
+                    action_type,
+                    changed_at,
+                    changed_by,
+                    COALESCE(old_data::text, '') AS old_data,
+                    COALESCE(new_data::text, '') AS new_data
+                FROM vw_audit_history
+                WHERE 1=1
+                """);
+        if (from != null) {
+            sql.append(" AND changed_at::date >= '").append(from).append("'");
+        }
+        if (to != null) {
+            sql.append(" AND changed_at::date <= '").append(to).append("'");
+        }
+        sql.append(" ORDER BY changed_at DESC");
+        return client.sql(sql.toString())
                 .map((row, meta) -> {
                     AuditHistoryDto dto = new AuditHistoryDto();
                     dto.setAuditId(row.get("audit_id", Long.class));
                     dto.setTableName(row.get("table_name", String.class));
                     dto.setRecordPk(row.get("record_pk", String.class));
                     dto.setActionType(row.get("action_type", String.class));
-                    dto.setChangedAt(toInstant(row.get("changed_at", LocalDateTime.class)));
+                    dto.setChangedAt(toInstantValue(row.get("changed_at")));
                     dto.setChangedBy(row.get("changed_by", String.class));
-                    Object oldData = row.get("old_data");
-                    Object newData = row.get("new_data");
-                    dto.setOldData(oldData == null ? null : oldData.toString());
-                    dto.setNewData(newData == null ? null : newData.toString());
+                    dto.setOldData(nullIfBlank(row.get("old_data", String.class)));
+                    dto.setNewData(nullIfBlank(row.get("new_data", String.class)));
                     return dto;
                 }).all();
     }
@@ -253,12 +272,18 @@ public class ReportService {
                     ws.actual_start,
                     ws.actual_end,
                     ws.status,
-                    COUNT(s.sale_id)::int AS linked_sales_count,
-                    COALESCE(SUM(s.total_amount), 0) AS linked_sales_total
+                    COALESCE(sagg.sale_count, 0)::int AS linked_sales_count,
+                    COALESCE(sagg.sale_total, 0) AS linked_sales_total
                 FROM work_shifts ws
                 JOIN app_users u ON u.user_id = ws.user_id
                 JOIN locations l ON l.location_id = ws.location_id
-                LEFT JOIN sales s ON s.shift_id = ws.shift_id
+                LEFT JOIN (
+                    SELECT shift_id,
+                           COUNT(*)::int AS sale_count,
+                           COALESCE(SUM(total_amount), 0) AS sale_total
+                    FROM sales
+                    GROUP BY shift_id
+                ) sagg ON sagg.shift_id = ws.shift_id
                 WHERE 1=1
                 """);
 
@@ -275,14 +300,7 @@ public class ReportService {
             sql.append(" AND ws.location_id = ").append(locationId);
         }
 
-        sql.append("""
-                
-                GROUP BY
-                    ws.shift_id, ws.user_id, u.username, u.full_name,
-                    ws.location_id, l.location_name, ws.role_name,
-                    ws.scheduled_start, ws.scheduled_end, ws.actual_start, ws.actual_end, ws.status
-                ORDER BY ws.scheduled_start DESC, ws.shift_id DESC
-                """);
+        sql.append(" ORDER BY ws.scheduled_start DESC, ws.shift_id DESC");
 
         return client.sql(sql.toString())
                 .map((row, meta) -> {
@@ -294,10 +312,10 @@ public class ReportService {
                     dto.setLocationId(row.get("location_id", Long.class));
                     dto.setLocationName(row.get("location_name", String.class));
                     dto.setRoleName(row.get("role_name", String.class));
-                    dto.setScheduledStart(row.get("scheduled_start", Instant.class));
-                    dto.setScheduledEnd(row.get("scheduled_end", Instant.class));
-                    dto.setActualStart(row.get("actual_start", Instant.class));
-                    dto.setActualEnd(row.get("actual_end", Instant.class));
+                    dto.setScheduledStart(toInstantValue(row.get("scheduled_start")));
+                    dto.setScheduledEnd(toInstantValue(row.get("scheduled_end")));
+                    dto.setActualStart(toInstantValue(row.get("actual_start")));
+                    dto.setActualEnd(toInstantValue(row.get("actual_end")));
                     dto.setStatus(row.get("status", String.class));
                     dto.setLinkedSalesCount(row.get("linked_sales_count", Integer.class));
                     dto.setLinkedSalesTotal(row.get("linked_sales_total", java.math.BigDecimal.class));
@@ -388,9 +406,9 @@ public class ReportService {
         return getShiftSummary(from, to, userId, locationId)
                 .collectList()
                 .map(rows -> toCsv(
-                        List.of("shiftId", "userId", "username", "fullName", "locationId", "locationName",
-                                "roleName", "scheduledStart", "scheduledEnd", "actualStart", "actualEnd",
-                                "status", "linkedSalesCount", "linkedSalesTotal"),
+                        List.of("ID Turno", "ID Usuario", "Usuario", "Nombre completo", "ID Sede", "Sede",
+                                "Rol del turno", "Inicio programado", "Fin programado", "Entrada real", "Salida real",
+                                "Estado", "Cantidad de ventas", "Total vendido"),
                         rows.stream()
                                 .map(row -> List.of(
                                         csvValue(row.getShiftId()),
@@ -399,12 +417,12 @@ public class ReportService {
                                         csvValue(row.getFullName()),
                                         csvValue(row.getLocationId()),
                                         csvValue(row.getLocationName()),
-                                        csvValue(row.getRoleName()),
+                                        csvValue(roleNameLabel(row.getRoleName())),
                                         csvValue(row.getScheduledStart()),
                                         csvValue(row.getScheduledEnd()),
                                         csvValue(row.getActualStart()),
                                         csvValue(row.getActualEnd()),
-                                        csvValue(row.getStatus()),
+                                        csvValue(shiftStatusLabel(row.getStatus())),
                                         csvValue(row.getLinkedSalesCount()),
                                         csvValue(row.getLinkedSalesTotal())
                                 ))
@@ -465,12 +483,12 @@ public class ReportService {
                                 cellText(row.getFullName()),
                                 cellNumber(row.getLocationId()),
                                 cellText(row.getLocationName()),
-                                cellText(row.getRoleName()),
+                                cellText(roleNameLabel(row.getRoleName())),
                                 cellDateTime(row.getScheduledStart()),
                                 cellDateTime(row.getScheduledEnd()),
                                 cellDateTime(row.getActualStart()),
                                 cellDateTime(row.getActualEnd()),
-                                cellText(row.getStatus()),
+                                cellText(shiftStatusLabel(row.getStatus())),
                                 cellNumber(row.getLinkedSalesCount()),
                                 cellAmount(row.getLinkedSalesTotal())
                         ))
@@ -548,34 +566,8 @@ public class ReportService {
                 .collectList()
                 .map(rows -> toWorkbookBytes("Movimientos",
                         buildMovementFilters(from, to, type),
-                        List.of("ID Movimiento", "Numero", "Tipo", "Fecha", "Ubicacion origen", "Ubicacion destino",
-                                "ID Producto", "Producto", "ID Unidad", "Unidad", "Cantidad", "Cantidad base",
-                                "Costo unitario", "Costo unitario base", "Lote", "Vencimiento",
-                                "Referencia", "Motivo", "Estado", "Creado por"),
-                        rows.stream()
-                                .map(row -> List.of(
-                                        cellNumber(row.getTransactionId()),
-                                        cellText(row.getTransactionNumber()),
-                                        cellText(row.getTransactionType()),
-                                        cellDateTime(row.getTransactionDate()),
-                                        cellText(row.getSourceLocation()),
-                                        cellText(row.getTargetLocation()),
-                                        cellNumber(row.getProductId()),
-                                        cellText(row.getProductName()),
-                                        cellNumber(row.getUnitId()),
-                                        cellText(row.getUnitCode()),
-                                        cellAmount(row.getQuantity()),
-                                        cellAmount(row.getQuantityBase()),
-                                        cellAmount(row.getUnitCost()),
-                                        cellAmount(row.getUnitCostBase()),
-                                        cellText(row.getLotNumber()),
-                                        cellDate(row.getExpirationDate()),
-                                        cellText(row.getReferenceText()),
-                                        cellText(row.getReason()),
-                                        cellText(row.getStatus()),
-                                        cellText(row.getCreatedBy())
-                                ))
-                                .toList()));
+                        movementHeaders(),
+                        rows.stream().map(this::movementRow).toList()));
     }
 
     public Mono<byte[]> exportWasteXlsx(LocalDate from, LocalDate to) {
@@ -600,11 +592,11 @@ public class ReportService {
                                 .toList()));
     }
 
-    public Mono<byte[]> exportAuditHistoryXlsx() {
-        return getAuditHistory()
+    public Mono<byte[]> exportAuditHistoryXlsx(LocalDate from, LocalDate to) {
+        return getAuditHistory(from, to)
                 .collectList()
                 .map(rows -> toWorkbookBytes("Auditoria",
-                        buildAuditFilters(),
+                        buildAuditFilters(from, to),
                         List.of("ID Auditoria", "Tabla", "PK Registro", "Accion", "Fecha cambio", "Usuario",
                                 "Datos anteriores", "Datos nuevos"),
                         rows.stream()
@@ -612,7 +604,7 @@ public class ReportService {
                                         cellNumber(row.getAuditId()),
                                         cellText(row.getTableName()),
                                         cellText(row.getRecordPk()),
-                                        cellText(row.getActionType()),
+                                        cellText(auditActionLabel(row.getActionType())),
                                         cellDateTime(row.getChangedAt()),
                                         cellText(row.getChangedBy()),
                                         cellText(row.getOldData()),
@@ -782,8 +774,14 @@ public class ReportService {
         if (value instanceof LocalDateTime localDateTime) {
             return localDateTime.toInstant(ZoneOffset.UTC);
         }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toInstant();
+        }
         if (value instanceof Instant instant) {
             return instant;
+        }
+        if (value instanceof java.time.ZonedDateTime zonedDateTime) {
+            return zonedDateTime.toInstant();
         }
         throw new IllegalArgumentException("Tipo de fecha no soportado: " + value.getClass().getName());
     }
@@ -803,7 +801,8 @@ public class ReportService {
         for (List<String> row : rows) {
             lines.add(String.join(",", row));
         }
-        return String.join("\n", lines);
+        // BOM para que Excel reconozca UTF-8 (tildes y caracteres especiales).
+        return "\uFEFF" + String.join("\n", lines);
     }
 
     private String csvValue(Object value) {
@@ -885,7 +884,8 @@ public class ReportService {
                     cell.setCellStyle(styles.number());
                 }
                 case AMOUNT -> {
-                    cell.setCellValue(((BigDecimal) value.value()).doubleValue());
+                    double numeric = toAmountDouble(value.value());
+                    cell.setCellValue(numeric);
                     cell.setCellStyle(styles.amount());
                 }
                 case DATE_TIME -> {
@@ -950,6 +950,16 @@ public class ReportService {
         return new ExcelCellValue(value, ExcelCellType.NUMBER);
     }
 
+    private double toAmountDouble(Object raw) {
+        if (raw instanceof BigDecimal decimal) {
+            return decimal.doubleValue();
+        }
+        if (raw instanceof Number number) {
+            return number.doubleValue();
+        }
+        throw new IllegalStateException("Valor no numerico para celda de monto: " + (raw == null ? "null" : raw.getClass()));
+    }
+
     private ExcelCellValue cellAmount(BigDecimal value) {
         return new ExcelCellValue(value, ExcelCellType.AMOUNT);
     }
@@ -973,8 +983,15 @@ public class ReportService {
         return List.of(
                 List.of("Fecha desde", filterValue(from)),
                 List.of("Fecha hasta", filterValue(to)),
-                List.of("Tipo", filterValue(type))
+                List.of("Tipo", filterValue(transactionTypeFilterLabel(type)))
         );
+    }
+
+    private String transactionTypeFilterLabel(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        return inventoryTransactionTypeEs(type);
     }
 
     private List<List<String>> buildDateRangeFilters(LocalDate from, LocalDate to) {
@@ -984,10 +1001,11 @@ public class ReportService {
         );
     }
 
-    private List<List<String>> buildAuditFilters() {
+    private List<List<String>> buildAuditFilters(LocalDate from, LocalDate to) {
         return List.of(
                 List.of("Reporte", "Historial de auditoria"),
-                List.of("Filtros", "Sin filtros")
+                List.of("Fecha desde", filterValue(from)),
+                List.of("Fecha hasta", filterValue(to))
         );
     }
 
@@ -1016,7 +1034,7 @@ public class ReportService {
         return List.of(
                 cellNumber(row.getTransactionId()),
                 cellText(row.getTransactionNumber()),
-                cellText(row.getTransactionType()),
+                cellText(inventoryTransactionTypeEs(row.getTransactionType())),
                 cellDateTime(row.getTransactionDate()),
                 cellText(row.getSourceLocation()),
                 cellText(row.getTargetLocation()),
@@ -1032,9 +1050,40 @@ public class ReportService {
                 cellDate(row.getExpirationDate()),
                 cellText(row.getReferenceText()),
                 cellText(row.getReason()),
-                cellText(row.getStatus()),
+                cellText(inventoryTransactionStatusEs(row.getStatus())),
                 cellText(row.getCreatedBy())
         );
+    }
+
+    private String inventoryTransactionTypeEs(String code) {
+        if (code == null || code.isBlank()) {
+            return "";
+        }
+        return switch (code) {
+            case "OPENING_STOCK" -> "Stock inicial";
+            case "PURCHASE" -> "Compra";
+            case "SALE" -> "Venta";
+            case "CONSUMPTION" -> "Consumo";
+            case "WASTE" -> "Merma";
+            case "ADJUSTMENT_IN" -> "Ajuste de entrada";
+            case "ADJUSTMENT_OUT" -> "Ajuste de salida";
+            case "TRANSFER" -> "Transferencia";
+            case "RETURN_TO_SUPPLIER" -> "Devolucion a proveedor";
+            case "RETURN_FROM_CUSTOMER" -> "Devolucion de cliente";
+            default -> code;
+        };
+    }
+
+    private String inventoryTransactionStatusEs(String code) {
+        if (code == null || code.isBlank()) {
+            return "";
+        }
+        return switch (code) {
+            case "DRAFT" -> "Borrador";
+            case "POSTED" -> "Publicado";
+            case "CANCELLED" -> "Cancelado";
+            default -> code;
+        };
     }
 
     private List<List<String>> buildShiftSummaryFilters(
@@ -1075,6 +1124,53 @@ public class ReportService {
 
     private String filterValue(Object value) {
         return value == null ? "Todos" : value.toString();
+    }
+
+    private String nullIfBlank(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value;
+    }
+
+    private String auditActionLabel(String actionType) {
+        if (actionType == null || actionType.isBlank()) {
+            return "";
+        }
+        return switch (actionType.trim().toUpperCase(Locale.ROOT)) {
+            case "INSERT" -> "Alta";
+            case "UPDATE" -> "Cambio";
+            case "DELETE" -> "Baja";
+            default -> actionType.trim();
+        };
+    }
+
+    private String shiftStatusLabel(String status) {
+        if (status == null || status.isBlank()) {
+            return "";
+        }
+        return switch (status.trim()) {
+            case "SCHEDULED" -> "Programado";
+            case "IN_PROGRESS" -> "En curso";
+            case "COMPLETED" -> "Completado";
+            case "MISSED" -> "No asistio";
+            case "CANCELLED" -> "Cancelado";
+            default -> status.trim();
+        };
+    }
+
+    private String roleNameLabel(String roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return "";
+        }
+        return switch (roleName.trim()) {
+            case "ADMINISTRADOR" -> "Administrador";
+            case "GERENTE" -> "Gerente";
+            case "INVENTARIO" -> "Inventario";
+            case "CAJERO" -> "Cajero";
+            case "BARTENDER" -> "Bartender";
+            default -> roleName.trim();
+        };
     }
 
     private Mono<String> resolveUserFilterLabel(Long userId) {

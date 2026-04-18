@@ -2,7 +2,6 @@ package com.bar.inventory.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
@@ -12,10 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CreateSaleRequest {
-    @NotBlank(message = "saleNumber es obligatorio")
     private String saleNumber;
 
-    @NotNull(message = "saleDatetime es obligatoria")
     private Instant saleDatetime;
 
     @NotNull(message = "locationId es obligatorio")

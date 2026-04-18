@@ -11,7 +11,12 @@ import { AuthService } from '../../core/services/auth.service';
 import { LocationApiService } from '../../core/services/catalog-api.service';
 import { ShiftApiService } from '../../core/services/operations-api.service';
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
+import { roleNameEs, shiftStatusEs } from '../../shared/i18n/operations-labels';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
+
+type ShiftRow = ShiftDto & { displayStatus: string; displayRole: string };
+
+type ShiftStatusFilter = 'ALL' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'MISSED';
 
 @Component({
   selector: 'app-shifts-page',
@@ -23,14 +28,7 @@ import { DataTableComponent } from '../../shared/ui/data-table.component';
         <div>
           <span class="chip">Fase 3</span>
           <h2 class="section-title">Turnos</h2>
-          <p class="section-subtitle">
-            <ng-container *ngIf="canManage(); else ownMode">
-              Programa, actualiza y controla los turnos del equipo.
-            </ng-container>
-            <ng-template #ownMode>
-              Consulta tus turnos asignados y registra tu entrada o salida.
-            </ng-template>
-          </p>
+          <p class="section-subtitle">Programacion, entrada y salida.</p>
         </div>
       </header>
 
@@ -51,11 +49,7 @@ import { DataTableComponent } from '../../shared/ui/data-table.component';
           <div class="field">
             <label>Rol</label>
             <select class="select" formControlName="roleName">
-              <option value="ADMINISTRADOR">ADMINISTRADOR</option>
-              <option value="GERENTE">GERENTE</option>
-              <option value="INVENTARIO">INVENTARIO</option>
-              <option value="CAJERO">CAJERO</option>
-              <option value="BARTENDER">BARTENDER</option>
+              <option *ngFor="let r of roleOptions" [value]="r.value">{{ r.label }}</option>
             </select>
           </div>
           <div class="field"><label>Inicio</label><input class="input" type="datetime-local" formControlName="scheduledStart"></div>
@@ -68,26 +62,77 @@ import { DataTableComponent } from '../../shared/ui/data-table.component';
         </div>
       </form>
 
+      <div class="toolbar shell-card shifts-toolbar">
+        <div class="field field-grow">
+          <label for="shift-search">Buscar</label>
+          <input
+            id="shift-search"
+            class="input"
+            type="search"
+            placeholder="Usuario, sede, rol, estado, notas..."
+            [value]="shiftSearch()"
+            (input)="shiftSearch.set($any($event.target).value)"
+          />
+        </div>
+        <div class="field">
+          <label for="shift-status-filter">Estado</label>
+          <select
+            id="shift-status-filter"
+            class="select"
+            [value]="shiftStatusFilter()"
+            (change)="onShiftStatusFilter($any($event.target).value)"
+          >
+            <option value="ALL">Todos</option>
+            <option value="SCHEDULED">Programado</option>
+            <option value="IN_PROGRESS">En curso</option>
+            <option value="COMPLETED">Completado</option>
+            <option value="CANCELLED">Cancelado</option>
+            <option value="MISSED">No asistio</option>
+          </select>
+        </div>
+      </div>
+
+      <h3 class="subsection-title">Turnos activos</h3>
       <app-data-table
-        [rows]="rows()"
+        [rows]="activeRows()"
         [columns]="columns"
         [showActions]="true"
         [editLabel]="canManage() ? 'Editar' : 'Seleccionar'"
         [removeLabel]="'Cancelar'"
         [hideRemoveAction]="!canManage()"
-        [emptyTitle]="'Sin turnos registrados'"
-        [emptyDescription]="canManage() ? 'Cuando existan turnos apareceran aqui.' : 'Cuando tengas turnos asignados apareceran aqui.'"
+        [emptyTitle]="'Sin turnos activos'"
+        [emptyDescription]="''"
         (edit)="selectShift($event)"
         (remove)="cancel($event)"
       />
 
-      <div class="actions">
+      <div class="actions shift-check-actions">
         <button class="btn btn-warning" type="button" (click)="checkInSelected()" [disabled]="!editing()">Registrar entrada</button>
         <button class="btn btn-accent" type="button" (click)="checkOutSelected()" [disabled]="!editing()">Registrar salida</button>
       </div>
+
+      <h3 class="subsection-title">Turnos completados</h3>
+      <app-data-table
+        [rows]="completedRows()"
+        [columns]="columns"
+        [showActions]="false"
+        [emptyTitle]="'Sin turnos completados'"
+        [emptyDescription]="''"
+      />
+
+      <h3 class="subsection-title">Turnos cancelados</h3>
+      <app-data-table
+        [rows]="cancelledRows()"
+        [columns]="columns"
+        [showActions]="false"
+        [emptyTitle]="'Sin turnos cancelados u omitidos'"
+        [emptyDescription]="''"
+      />
     </section>
   `,
-  styles: [`.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.actions{display:flex;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`],
+  styles: [
+    `.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.shifts-toolbar{padding:1rem;margin-top:0.25rem;margin-bottom:0.75rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end}.field-grow{flex:1;min-width:12rem}.actions{display:flex;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}.shift-check-actions{margin:0.75rem 0 1rem}.subsection-title{margin:1rem 0 0.5rem;font-family:'Sora',sans-serif;font-size:1.05rem}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ShiftsPageComponent implements OnInit {
@@ -99,17 +144,35 @@ export class ShiftsPageComponent implements OnInit {
   private readonly feedback = inject(UiFeedbackService);
 
   protected readonly canManage = computed(() => this.auth.hasAnyRole(['ADMINISTRADOR', 'GERENTE']));
-  protected readonly rows = signal<ShiftDto[]>([]);
+  protected readonly rows = signal<ShiftRow[]>([]);
+  protected readonly shiftSearch = signal('');
+  protected readonly shiftStatusFilter = signal<ShiftStatusFilter>('ALL');
+  protected readonly activeRows = computed(() =>
+    this.rows().filter((r) => this.isActiveStatus(r.status) && this.matchesShiftFilters(r))
+  );
+  protected readonly completedRows = computed(() =>
+    this.rows().filter((r) => r.status === 'COMPLETED' && this.matchesShiftFilters(r))
+  );
+  protected readonly cancelledRows = computed(() =>
+    this.rows().filter((r) => this.isCancelledLike(r.status) && this.matchesShiftFilters(r))
+  );
   protected readonly users = signal<UserAdmin[]>([]);
   protected readonly locations = signal<Location[]>([]);
   protected readonly editing = signal<ShiftDto | null>(null);
-  protected readonly columns: DataColumn<ShiftDto>[] = [
+  protected readonly roleOptions = [
+    { value: 'ADMINISTRADOR', label: 'Administrador' },
+    { value: 'GERENTE', label: 'Gerente' },
+    { value: 'INVENTARIO', label: 'Inventario' },
+    { value: 'CAJERO', label: 'Cajero' },
+    { value: 'BARTENDER', label: 'Bartender' }
+  ];
+  protected readonly columns: DataColumn<ShiftRow>[] = [
     { key: 'fullName', label: 'Usuario' },
     { key: 'locationName', label: 'Ubicacion' },
-    { key: 'roleName', label: 'Rol', type: 'badge' },
+    { key: 'displayRole', label: 'Rol', type: 'badge' },
     { key: 'scheduledStart', label: 'Inicio' },
     { key: 'scheduledEnd', label: 'Fin' },
-    { key: 'status', label: 'Estado', type: 'badge' }
+    { key: 'displayStatus', label: 'Estado', type: 'badge' }
   ];
   protected readonly form = this.fb.nonNullable.group({
     userId: [0, Validators.required],
@@ -122,6 +185,42 @@ export class ShiftsPageComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+  }
+
+  protected onShiftStatusFilter(value: string): void {
+    this.shiftStatusFilter.set(value as ShiftStatusFilter);
+  }
+
+  private isActiveStatus(status: string): boolean {
+    return status === 'SCHEDULED' || status === 'IN_PROGRESS';
+  }
+
+  private isCancelledLike(status: string): boolean {
+    return status === 'CANCELLED' || status === 'MISSED';
+  }
+
+  private matchesShiftFilters(row: ShiftRow): boolean {
+    const sf = this.shiftStatusFilter();
+    if (sf !== 'ALL' && row.status !== sf) {
+      return false;
+    }
+    const q = this.shiftSearch().trim().toLowerCase();
+    if (!q) {
+      return true;
+    }
+    const blob = [
+      row.fullName,
+      row.username,
+      row.locationName,
+      row.displayStatus,
+      row.displayRole,
+      row.notes,
+      String(row.id)
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return blob.includes(q);
   }
 
   protected save(): void {
@@ -202,10 +301,18 @@ export class ShiftsPageComponent implements OnInit {
     });
   }
 
+  private toRows(raw: ShiftDto[]): ShiftRow[] {
+    return raw.map((r) => ({
+      ...r,
+      displayStatus: shiftStatusEs(r.status),
+      displayRole: roleNameEs(r.roleName)
+    }));
+  }
+
   private load(): void {
     if (this.canManage()) {
       forkJoin([this.api.list(), this.usersApi.list(), this.locationsApi.list()]).subscribe(([rows, users, locations]) => {
-        this.rows.set(rows);
+        this.rows.set(this.toRows(rows));
         this.users.set(users);
         this.locations.set(locations);
         if (!this.editing()) {
@@ -216,16 +323,18 @@ export class ShiftsPageComponent implements OnInit {
     }
 
     this.api.myShifts().subscribe((rows) => {
-      this.rows.set(rows);
+      this.rows.set(this.toRows(rows));
       this.editing.set(rows[0] ?? null);
     });
   }
 
   private loadRows(): void {
     if (this.canManage()) {
-      this.api.list().subscribe((rows) => this.rows.set(rows));
+      this.api.list().subscribe((rows) => this.rows.set(this.toRows(rows)));
       return;
     }
-    this.api.myShifts().subscribe((rows) => this.rows.set(rows));
+    this.api.myShifts().subscribe((rows) => {
+      this.rows.set(this.toRows(rows));
+    });
   }
 }

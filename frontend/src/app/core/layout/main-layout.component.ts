@@ -29,12 +29,26 @@ import { AuthService } from '../services/auth.service';
           </a>
         </nav>
 
-        <div class="sidebar-actions">
-          <button class="btn btn-secondary theme-toggle" type="button" (click)="toggleTheme()">
-            {{ darkMode() ? 'Claro' : 'Oscuro' }}
+        <div class="sidebar-actions" [class.sidebar-actions--compact]="sidebarCollapsed()">
+          <button
+            class="btn btn-secondary theme-toggle"
+            type="button"
+            (click)="toggleTheme()"
+            [attr.aria-label]="darkMode() ? 'Tema claro' : 'Tema oscuro'"
+            [title]="darkMode() ? 'Tema claro' : 'Tema oscuro'"
+          >
+            <span class="sidebar-action-icon" aria-hidden="true">{{ themeIcon() }}</span>
+            <span class="sidebar-action-text" *ngIf="!sidebarCollapsed()">{{ darkMode() ? 'Claro' : 'Oscuro' }}</span>
           </button>
-          <button class="btn btn-secondary sidebar-toggle" type="button" (click)="toggleSidebar()">
-            {{ sidebarCollapsed() ? 'Expandir' : 'Colapsar' }}
+          <button
+            class="btn btn-secondary sidebar-toggle"
+            type="button"
+            (click)="toggleSidebar()"
+            [attr.aria-label]="sidebarCollapsed() ? 'Expandir menu' : 'Colapsar menu'"
+            [title]="sidebarCollapsed() ? 'Expandir menu' : 'Colapsar menu'"
+          >
+            <span class="sidebar-action-icon" aria-hidden="true">{{ sidebarIcon() }}</span>
+            <span class="sidebar-action-text" *ngIf="!sidebarCollapsed()">{{ sidebarCollapsed() ? 'Expandir' : 'Colapsar' }}</span>
           </button>
         </div>
       </aside>
@@ -140,6 +154,7 @@ import { AuthService } from '../services/auth.service';
       border-radius: 18px;
       color: var(--color-muted);
       font-weight: 600;
+      text-decoration: none;
       transition: transform 180ms ease, background 220ms ease, color 220ms ease;
     }
 
@@ -161,6 +176,41 @@ import { AuthService } from '../services/auth.service';
     .sidebar-actions {
       display: grid;
       gap: 0.75rem;
+    }
+
+    .sidebar-actions--compact {
+      gap: 0.4rem;
+    }
+
+    .sidebar-actions--compact .theme-toggle,
+    .sidebar-actions--compact .sidebar-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.5rem;
+      padding: 0.4rem 0.55rem;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .sidebar-action-icon {
+      font-size: 1.15rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .sidebar-action-text {
+      margin-left: 0.45rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-actions:not(.sidebar-actions--compact) .theme-toggle,
+    .sidebar-actions:not(.sidebar-actions--compact) .sidebar-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
     }
 
     .theme-toggle,
@@ -262,6 +312,14 @@ export class MainLayoutComponent {
 
   protected toggleSidebar(): void {
     this.sidebarCollapsed.update((value) => !value);
+  }
+
+  protected themeIcon(): string {
+    return this.darkMode() ? '\u2600' : '\u263E';
+  }
+
+  protected sidebarIcon(): string {
+    return this.sidebarCollapsed() ? '\u226B' : '\u226A';
   }
 
   protected toggleTheme(): void {

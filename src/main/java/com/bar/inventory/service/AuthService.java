@@ -32,7 +32,7 @@ public class AuthService {
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Usuario no encontrado")))
                 .flatMap(user -> validatePassword(user, request.getPassword()))
                 .flatMap(user -> loadRoles(user.getUsername())
-                        .map(roles -> new AuthResponse(jwtUtil.generateToken(user.getUsername(), roles))));
+                        .map(roles -> new AuthResponse(jwtUtil.generateToken(user.getUsername(), roles, user.getId()))));
     }
 
     private Mono<User> validatePassword(User user, String rawPassword) {

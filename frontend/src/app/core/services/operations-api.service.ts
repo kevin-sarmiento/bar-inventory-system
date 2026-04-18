@@ -88,4 +88,11 @@ export class ShiftApiService extends BaseApiService<ShiftDto, CreateShiftPayload
   checkOut(id: number) {
     return this.http.post<ShiftDto>(this.url(`/${id}/check-out`), null);
   }
+
+  /** Turnos del usuario en la sede, en estado programado o en curso (para asociar a una venta). */
+  forSale(locationId: number) {
+    return this.http.get<ShiftDto[]>(this.url('/for-sale'), {
+      params: new HttpParams().set('locationId', String(locationId))
+    });
+  }
 }
