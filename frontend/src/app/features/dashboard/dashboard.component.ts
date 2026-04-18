@@ -1,14 +1,12 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { NgFor, NgIf } from '@angular/common';
-import { DashboardCard } from '../../core/models/dashboard.models';
+import { DecimalPipe, NgIf } from '@angular/common';
 import { DashboardSummaryDto } from '../../core/models/report.models';
 import { ReportApiService } from '../../core/services/report-api.service';
-import { StatCardComponent } from '../../shared/ui/stat-card.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [NgFor, NgIf, StatCardComponent],
+  imports: [NgIf, DecimalPipe],
   template: `
     <section class="page-stack">
       <div class="hero shell-card">
@@ -26,22 +24,33 @@ import { StatCardComponent } from '../../shared/ui/stat-card.component';
         </div>
       </div>
 
-      <div class="stats-grid">
-        <app-stat-card
-          *ngFor="let card of cards"
-          [title]="card.title"
-          [value]="card.value"
-          [helper]="card.helper"
-          [tone]="card.tone"
-        />
-      </div>
-
-      <article class="insight shell-card" *ngIf="summary() as summary">
-        <h3>Resumen del dia</h3>
-        <p>
-          Fecha {{ summary.reportDate }}. Ventas: {{ summary.salesCount }}, ticket promedio: {{ summary.averageTicket }},
-          existencias bajas: {{ summary.lowStockItems }}.
-        </p>
+      <article class="insight shell-card daily-summary" *ngIf="summary() as s">
+        <header class="daily-summary__head">
+          <h3>Resumen del dia</h3>
+          <p class="daily-summary__meta">{{ s.reportDate }}<span *ngIf="s.locationName"> · {{ s.locationName }}</span></p>
+        </header>
+        <div class="daily-summary__grid">
+          <div class="daily-summary__tile daily-summary__tile--sales">
+            <span class="daily-summary__label">Ventas</span>
+            <strong>{{ s.salesCount }}</strong>
+            <span class="daily-summary__hint">Ticket promedio {{ s.averageTicket | number: '1.0-2' }}</span>
+          </div>
+          <div class="daily-summary__tile daily-summary__tile--money">
+            <span class="daily-summary__label">Total vendido</span>
+            <strong>{{ s.salesTotal | number: '1.0-0' }}</strong>
+            <span class="daily-summary__hint">Monto acumulado del dia</span>
+          </div>
+          <div class="daily-summary__tile daily-summary__tile--stock">
+            <span class="daily-summary__label">Existencias bajas</span>
+            <strong>{{ s.lowStockItems }}</strong>
+            <span class="daily-summary__hint">Productos por reponer</span>
+          </div>
+          <div class="daily-summary__tile daily-summary__tile--inv">
+            <span class="daily-summary__label">Valor inventario</span>
+            <strong>{{ s.inventoryValue | number: '1.0-0' }}</strong>
+            <span class="daily-summary__hint">Estimacion en sede</span>
+          </div>
+        </div>
       </article>
     </section>
   `,
@@ -65,28 +74,94 @@ import { StatCardComponent } from '../../shared/ui/stat-card.component';
       animation: floatGlow 5s ease-in-out infinite;
     }
 
-    .stats-grid {
+    .daily-summary {
+      padding: 1.35rem 1.5rem;
+    }
+
+    .daily-summary__head {
+      margin-bottom: 1.1rem;
+    }
+
+    .daily-summary__head h3 {
+      margin: 0 0 0.25rem;
+      font-family: 'Sora', sans-serif;
+      font-size: 1.2rem;
+    }
+
+    .daily-summary__meta {
+      margin: 0;
+      color: var(--color-muted);
+      font-size: 0.88rem;
+    }
+
+    .daily-summary__grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 1rem;
+      gap: 0.85rem;
     }
 
-    .insight {
-      padding: 1.4rem;
+    .daily-summary__tile {
+      border-radius: 18px;
+      padding: 1rem 1.05rem;
+      display: grid;
+      gap: 0.35rem;
+      border: 1px solid rgba(41, 50, 65, 0.08);
+      background: rgba(255, 255, 255, 0.55);
     }
 
-    .insight h3 {
-      margin: 0 0 0.5rem;
-      font-family: 'Sora', sans-serif;
-    }
-
-    .insight p {
-      margin: 0;
+    .daily-summary__label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 700;
       color: var(--color-muted);
     }
 
-    app-stat-card {
-      animation: cardRise 480ms ease both;
+    .daily-summary__tile strong {
+      font-family: 'Sora', sans-serif;
+      font-size: 1.45rem;
+      line-height: 1.2;
+    }
+
+    .daily-summary__hint {
+      font-size: 0.8rem;
+      color: var(--color-muted);
+    }
+
+    .daily-summary__tile--sales {
+      border-left: 4px solid #0d9488;
+      background: linear-gradient(180deg, rgba(13, 148, 136, 0.12), rgba(255, 255, 255, 0.75));
+    }
+
+    .daily-summary__tile--sales strong {
+      color: #0f766e;
+    }
+
+    .daily-summary__tile--money {
+      border-left: 4px solid #d97706;
+      background: linear-gradient(180deg, rgba(217, 119, 6, 0.12), rgba(255, 255, 255, 0.75));
+    }
+
+    .daily-summary__tile--money strong {
+      color: #b45309;
+    }
+
+    .daily-summary__tile--stock {
+      border-left: 4px solid #e11d48;
+      background: linear-gradient(180deg, rgba(225, 29, 72, 0.1), rgba(255, 255, 255, 0.75));
+    }
+
+    .daily-summary__tile--stock strong {
+      color: #be123c;
+    }
+
+    .daily-summary__tile--inv {
+      border-left: 4px solid #4f46e5;
+      background: linear-gradient(180deg, rgba(79, 70, 229, 0.1), rgba(255, 255, 255, 0.75));
+    }
+
+    .daily-summary__tile--inv strong {
+      color: #4338ca;
     }
 
     @keyframes floatGlow {
@@ -100,20 +175,9 @@ import { StatCardComponent } from '../../shared/ui/stat-card.component';
       }
     }
 
-    @keyframes cardRise {
-      from {
-        opacity: 0;
-        transform: translateY(14px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
     @media (max-width: 1024px) {
       .hero,
-      .stats-grid {
+      .daily-summary__grid {
         grid-template-columns: 1fr;
       }
     }
@@ -123,23 +187,9 @@ import { StatCardComponent } from '../../shared/ui/stat-card.component';
 export class DashboardComponent implements OnInit {
   private readonly reportsApi = inject(ReportApiService);
   protected readonly summary = signal<DashboardSummaryDto | null>(null);
-  protected cards: DashboardCard[] = [
-    { title: 'Inventario', value: '24/7', helper: 'Consulta permanente del estado general.', tone: 'mint' },
-    { title: 'Modulos', value: '13', helper: 'Acceso centralizado a las areas del sistema.', tone: 'lemon' },
-    { title: 'Operacion', value: 'Activa', helper: 'Seguimiento visual de la actividad diaria.', tone: 'coral' },
-    { title: 'Control', value: 'Total', helper: 'Vista general del negocio en un solo lugar.', tone: 'ocean' }
-  ];
 
   ngOnInit(): void {
-    this.reportsApi.getDailyDashboard().subscribe((summary) => {
-      this.summary.set(summary);
-      this.cards = [
-        { title: 'Ventas del dia', value: String(summary.salesCount), helper: 'Registros acumulados del dia', tone: 'mint' },
-        { title: 'Venta total', value: String(summary.salesTotal), helper: 'Monto total registrado', tone: 'lemon' },
-        { title: 'Existencias bajas', value: String(summary.lowStockItems), helper: 'Productos que requieren atencion', tone: 'coral' },
-        { title: 'Inventario', value: String(summary.inventoryValue), helper: 'Valor estimado disponible', tone: 'ocean' }
-      ];
-    });
+    this.reportsApi.getDailyDashboard().subscribe((summary) => this.summary.set(summary));
   }
 
 }

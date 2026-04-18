@@ -49,6 +49,7 @@ public class ProductService {
                     existing.setName(product.getName());
                     existing.setCategoryId(product.getCategoryId());
                     existing.setBaseUnitId(product.getBaseUnitId());
+                    existing.setDefaultLocationId(product.getDefaultLocationId());
                     existing.setMinStockBaseQty(product.getMinStockBaseQty());
                     existing.setBarcode(product.getBarcode());
                     existing.setActive(product.getActive());

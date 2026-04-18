@@ -60,6 +60,7 @@ export interface Product {
   name: string;
   categoryId: number;
   baseUnitId: number;
+  defaultLocationId?: number | null;
   minStockBaseQty: number;
   barcode?: string | null;
   active?: boolean | null;
@@ -71,6 +72,7 @@ export interface ProductPayload {
   name: string;
   categoryId: number;
   baseUnitId: number;
+  defaultLocationId?: number | null;
   minStockBaseQty: number;
   barcode?: string | null;
   active?: boolean | null;

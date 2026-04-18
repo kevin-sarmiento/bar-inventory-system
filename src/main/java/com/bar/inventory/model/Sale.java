@@ -1,6 +1,7 @@
 package com.bar.inventory.model;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -25,6 +26,9 @@ public class Sale {
     @Column("cashier_user_id")
     private Long cashierUserId;
 
+    @Column("created_by")
+    private Long createdBy;
+
     @Column("shift_id")
     private Long shiftId;
 
@@ -41,6 +45,21 @@ public class Sale {
 
     @Column("updated_at")
     private Instant updatedAt;
+
+    @Transient
+    private String cashierUsername;
+
+    @Transient
+    private String cashierFullName;
+
+    @Transient
+    private String locationName;
+
+    @Transient
+    private String createdByUsername;
+
+    @Transient
+    private String createdByFullName;
 
     public Long getId() {
         return id;
@@ -80,6 +99,14 @@ public class Sale {
 
     public void setCashierUserId(Long cashierUserId) {
         this.cashierUserId = cashierUserId;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(Long createdBy) {
+        this.createdBy = createdBy;
     }
 
     public Long getShiftId() {
@@ -128,5 +155,45 @@ public class Sale {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getCashierUsername() {
+        return cashierUsername;
+    }
+
+    public void setCashierUsername(String cashierUsername) {
+        this.cashierUsername = cashierUsername;
+    }
+
+    public String getCashierFullName() {
+        return cashierFullName;
+    }
+
+    public void setCashierFullName(String cashierFullName) {
+        this.cashierFullName = cashierFullName;
+    }
+
+    public String getLocationName() {
+        return locationName;
+    }
+
+    public void setLocationName(String locationName) {
+        this.locationName = locationName;
+    }
+
+    public String getCreatedByUsername() {
+        return createdByUsername;
+    }
+
+    public void setCreatedByUsername(String createdByUsername) {
+        this.createdByUsername = createdByUsername;
+    }
+
+    public String getCreatedByFullName() {
+        return createdByFullName;
+    }
+
+    public void setCreatedByFullName(String createdByFullName) {
+        this.createdByFullName = createdByFullName;
     }
 }

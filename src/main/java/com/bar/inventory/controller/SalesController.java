@@ -43,13 +43,13 @@ public class SalesController {
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR','CAJERO','BARTENDER')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','CAJERO','BARTENDER','GERENTE')")
     public Mono<Sale> create(@Valid @RequestBody CreateSaleRequest request) {
         return service.createSale(request);
     }
 
     @PostMapping("/{id}/post-inventory")
-    @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','INVENTARIO','GERENTE')")
     public Mono<Map<String, Long>> postInventory(@PathVariable("id") Long id, @RequestParam(value = "userId", required = false) Long userId) {
         return service.postToInventory(id, userId).map(txnId -> Map.of("transactionId", txnId));
     }

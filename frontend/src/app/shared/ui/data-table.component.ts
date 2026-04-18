@@ -57,17 +57,25 @@ import { DataColumn } from '../../core/models/api.models';
   styles: [`
     .table-shell {
       padding: 0.65rem;
+      max-width: 100%;
+      min-width: 0;
       overflow: hidden;
     }
 
     .table-responsive {
-      overflow: auto;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: visible;
+      -webkit-overflow-scrolling: touch;
+      border-radius: var(--radius-md, 14px);
     }
 
     table {
       width: 100%;
-      min-width: 760px;
+      min-width: 720px;
       border-collapse: collapse;
+      table-layout: auto;
     }
 
     th,
@@ -75,7 +83,10 @@ import { DataColumn } from '../../core/models/api.models';
       text-align: left;
       padding: 1rem;
       border-bottom: 1px solid rgba(41, 50, 65, 0.08);
-      vertical-align: middle;
+      vertical-align: top;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      max-width: 28rem;
     }
 
     th {

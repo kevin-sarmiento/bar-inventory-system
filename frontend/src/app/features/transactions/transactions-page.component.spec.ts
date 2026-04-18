@@ -14,11 +14,12 @@ describe('TransactionsPageComponent', () => {
   const unitsApi = jasmine.createSpyObj<UnitApiService>('UnitApiService', ['list']);
   const feedback = jasmine.createSpyObj<UiFeedbackService>('UiFeedbackService', ['success']);
 
-  function authStub(roles: string[]) {
+  function authStub(roles: string[], uid = 1) {
     return {
       hasAnyRole(expected: string[]) {
         return expected.some((role) => roles.includes(role));
-      }
+      },
+      userId: () => uid
     };
   }
 
@@ -75,7 +76,6 @@ describe('TransactionsPageComponent', () => {
     component.form.patchValue({
       transactionNumber: 'TX-200',
       transactionType: 'PURCHASE',
-      transactionDate: '2026-04-16T08:00',
       sourceLocationId: 1,
       targetLocationId: null,
       supplierId: 2,

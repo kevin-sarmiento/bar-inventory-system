@@ -24,14 +24,13 @@ describe('LoginComponent', () => {
     }).compileComponents();
   });
 
-  it('muestra SAKE destacado y conserva solo el texto corto de apoyo', () => {
+  it('muestra SAKE y texto de apoyo compacto', () => {
     const fixture = TestBed.createComponent(LoginComponent);
     fixture.detectChanges();
 
     const content = fixture.nativeElement.textContent;
     expect(content).toContain('SAKE');
-    expect(content).toContain('Administra inventario, productos, ventas y movimientos diarios');
-    expect(content).not.toContain('centraliza la operacion de tu bar');
+    expect(content).toContain('Inventario, ventas y turnos');
   });
 
   it('envia credenciales validas y redirige al panel', () => {

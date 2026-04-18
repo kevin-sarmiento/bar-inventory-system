@@ -63,7 +63,7 @@ public class InventoryTransactionService {
         InventoryTransaction tx = new InventoryTransaction();
         tx.setTransactionNumber(request.getTransactionNumber());
         tx.setTransactionType(request.getTransactionType());
-        tx.setTransactionDate(request.getTransactionDate() == null ? Instant.now() : request.getTransactionDate());
+        tx.setTransactionDate(Instant.now());
         tx.setStatus(request.getStatus() == null ? "POSTED" : request.getStatus());
         tx.setCreatedBy(request.getCreatedBy());
         tx.setSourceLocationId(request.getSourceLocationId());

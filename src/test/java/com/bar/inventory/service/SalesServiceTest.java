@@ -6,6 +6,7 @@ import com.bar.inventory.model.Sale;
 import com.bar.inventory.model.WorkShift;
 import com.bar.inventory.repository.SaleItemRepository;
 import com.bar.inventory.repository.SaleRepository;
+import com.bar.inventory.repository.UserRepository;
 import com.bar.inventory.repository.WorkShiftRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,10 +34,12 @@ class SalesServiceTest {
     private DatabaseClient databaseClient;
     @Mock
     private WorkShiftRepository workShiftRepository;
+    @Mock
+    private UserRepository userRepository;
 
     @Test
     void createSaleShouldRejectItemWithMenuAndProductAtSameTime() {
-        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, databaseClient);
+        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, userRepository, databaseClient);
         CreateSaleRequest request = validRequest();
         request.getItems().get(0).setProductId(1L);
 
@@ -45,7 +48,7 @@ class SalesServiceTest {
 
     @Test
     void createSaleShouldRejectWhenTotalAmountDoesNotMatchItems() {
-        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, databaseClient);
+        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, userRepository, databaseClient);
         CreateSaleRequest request = validRequest();
         request.setTotalAmount(BigDecimal.ONE);
 
@@ -54,7 +57,7 @@ class SalesServiceTest {
 
     @Test
     void createSaleShouldRejectDuplicatedItems() {
-        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, databaseClient);
+        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, userRepository, databaseClient);
         CreateSaleRequest request = validRequest();
         CreateSaleItemRequest duplicate = new CreateSaleItemRequest();
         duplicate.setMenuItemId(1L);
@@ -68,7 +71,7 @@ class SalesServiceTest {
 
     @Test
     void createSaleShouldRejectCompletedShift() {
-        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, databaseClient);
+        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, userRepository, databaseClient);
         CreateSaleRequest request = validRequest();
         request.setShiftId(3L);
         WorkShift shift = new WorkShift();
@@ -85,7 +88,7 @@ class SalesServiceTest {
 
     @Test
     void postToInventoryShouldFailWhenSaleAlreadyProcessed() {
-        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, databaseClient);
+        SalesService service = new SalesService(saleRepository, saleItemRepository, workShiftRepository, userRepository, databaseClient);
         Sale sale = new Sale();
         sale.setId(10L);
         sale.setStatus("PAID");

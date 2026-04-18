@@ -114,6 +114,12 @@ export interface Sale {
   inventoryProcessed: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
+  cashierUsername?: string | null;
+  cashierFullName?: string | null;
+  locationName?: string | null;
+  createdBy?: number | null;
+  createdByUsername?: string | null;
+  createdByFullName?: string | null;
 }
 
 export interface SaleItem {
@@ -135,10 +141,10 @@ export interface CreateSaleItemPayload {
 }
 
 export interface CreateSalePayload {
-  saleNumber: string;
-  saleDatetime: string;
+  saleNumber?: string | null;
+  saleDatetime?: string | null;
   locationId: number;
-  cashierUserId: number;
+  cashierUserId?: number | null;
   shiftId?: number | null;
   totalAmount: number;
   status?: string | null;

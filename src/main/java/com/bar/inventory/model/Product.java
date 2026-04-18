@@ -30,6 +30,9 @@ public class Product {
     @NotNull(message = "baseUnitId es obligatorio")
     private Long baseUnitId;
 
+    @Column("default_location_id")
+    private Long defaultLocationId;
+
     @Column("min_stock_base_qty")
     @NotNull(message = "minStockBaseQty es obligatorio")
     @DecimalMin(value = "0", message = "minStockBaseQty no puede ser negativo")
@@ -86,6 +89,14 @@ public class Product {
 
     public void setBaseUnitId(Long baseUnitId) {
         this.baseUnitId = baseUnitId;
+    }
+
+    public Long getDefaultLocationId() {
+        return defaultLocationId;
+    }
+
+    public void setDefaultLocationId(Long defaultLocationId) {
+        this.defaultLocationId = defaultLocationId;
     }
 
     public BigDecimal getMinStockBaseQty() {

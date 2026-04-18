@@ -53,6 +53,30 @@ public class WorkShiftService {
                 .flatMapMany(user -> baseShiftQuery("WHERE ws.user_id = %d".formatted(user.getId())).all());
     }
 
+    /**
+     * Turnos aptos para asociar una venta (programado o en curso) en la sede indicada.
+     * Cajero/bartender: solo los propios. Administrador/gerente: todos los de esa ubicacion.
+     */
+    public Flux<ShiftDto> findShiftsEligibleForSale(Long locationId) {
+        if (locationId == null || locationId <= 0) {
+            return Flux.error(new IllegalArgumentException("locationId es obligatorio"));
+        }
+        return currentUser()
+                .flatMapMany(ctx -> {
+                    String where = isManager(ctx)
+                            ? """
+                                    WHERE ws.location_id = %d
+                                      AND ws.status IN ('SCHEDULED', 'IN_PROGRESS')
+                                    """.formatted(locationId)
+                            : """
+                                    WHERE ws.location_id = %d
+                                      AND ws.user_id = %d
+                                      AND ws.status IN ('SCHEDULED', 'IN_PROGRESS')
+                                    """.formatted(locationId, ctx.getId());
+                    return baseShiftQuery(where).all();
+                });
+    }
+
     public Mono<ShiftDto> create(CreateShiftRequest request) {
         validateShiftRequest(request);
         String normalizedRole = normalizeRoleName(request.getRoleName());

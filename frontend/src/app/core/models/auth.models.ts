@@ -11,6 +11,7 @@ export interface AuthUser {
   username: string;
   roles: AppRole[];
   token: string;
+  userId?: number;
 }
 
 export type AppRole =

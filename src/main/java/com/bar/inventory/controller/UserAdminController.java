@@ -36,7 +36,7 @@ public class UserAdminController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR','GERENTE')")
     public Flux<UserAdminDto> findAll() {
         return userAdminService.findAllUsers();
     }

@@ -12,11 +12,12 @@ describe('PhysicalCountsPageComponent', () => {
   const productsApi = jasmine.createSpyObj<ProductApiService>('ProductApiService', ['list']);
   const feedback = jasmine.createSpyObj<UiFeedbackService>('UiFeedbackService', ['success']);
 
-  function authStub(roles: string[]) {
+  function authStub(roles: string[], uid = 3) {
     return {
       hasAnyRole(expected: string[]) {
         return expected.some((role) => roles.includes(role));
-      }
+      },
+      userId: () => uid
     };
   }
 

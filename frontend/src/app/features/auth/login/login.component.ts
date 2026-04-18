@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { NgIf } from '@angular/common';
 import { Router } from '@angular/router';
@@ -15,7 +15,7 @@ import { UiFeedbackService } from '../../../core/services/ui-feedback.service';
       <article class="login-panel shell-card fade-in">
         <div class="hero-copy">
           <strong class="brand-title">SAKE</strong>
-          <p>Administra inventario, productos, ventas y movimientos diarios desde una sola plataforma clara, agil y lista para trabajar.</p>
+          <p class="hero-lead">Inventario, ventas y turnos en un solo panel — rápido, claro y listo para operar cada día.</p>
         </div>
 
         <div class="hero-image">
@@ -32,16 +32,35 @@ import { UiFeedbackService } from '../../../core/services/ui-feedback.service';
           <p class="helper">Ingresa con tu usuario y contrasena para continuar.</p>
         </div>
 
-        <form [formGroup]="form" class="form-grid" (ngSubmit)="submit()">
+        <form [formGroup]="form" class="form-grid" autocomplete="off" (ngSubmit)="submit()">
           <div class="field">
             <label for="username">Usuario</label>
-            <input id="username" class="input" formControlName="username" placeholder="admin">
+            <input
+              id="username"
+              class="input"
+              formControlName="username"
+              name="sake-login-user"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              readonly
+              (focus)="unlockField($event)"
+            />
             <span class="field-error" *ngIf="form.controls.username.touched && form.controls.username.invalid">El usuario es obligatorio.</span>
           </div>
 
           <div class="field">
             <label for="password">Contrasena</label>
-            <input id="password" type="password" class="input" formControlName="password" placeholder="********">
+            <input
+              id="password"
+              type="password"
+              class="input"
+              formControlName="password"
+              name="sake-login-pass"
+              autocomplete="new-password"
+              readonly
+              (focus)="unlockField($event)"
+            />
             <span class="field-error" *ngIf="form.controls.password.touched && form.controls.password.invalid">La contrasena es obligatoria.</span>
           </div>
 
@@ -96,7 +115,16 @@ import { UiFeedbackService } from '../../../core/services/ui-feedback.service';
       letter-spacing: 0.08em;
     }
 
-    .hero-copy p,
+    .hero-copy .hero-lead {
+      margin: 0.35rem 0 0;
+      max-width: 20rem;
+      color: #141820;
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 0.9rem;
+      line-height: 1.42;
+      letter-spacing: -0.015em;
+    }
+
     .helper {
       margin: 0;
       color: var(--color-muted);
@@ -154,7 +182,7 @@ import { UiFeedbackService } from '../../../core/services/ui-feedback.service';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class LoginComponent {
+export class LoginComponent implements AfterViewInit {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -165,6 +193,15 @@ export class LoginComponent {
     username: ['', Validators.required],
     password: ['', Validators.required]
   });
+
+  ngAfterViewInit(): void {
+    queueMicrotask(() => this.form.reset({ username: '', password: '' }, { emitEvent: false }));
+  }
+
+  protected unlockField(event: FocusEvent): void {
+    const el = event.target as HTMLInputElement | null;
+    el?.removeAttribute('readonly');
+  }
 
   protected submit(): void {
     if (this.form.invalid || this.loading()) {

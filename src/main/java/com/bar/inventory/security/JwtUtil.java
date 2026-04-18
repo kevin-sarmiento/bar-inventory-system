@@ -25,17 +25,19 @@ public class JwtUtil {
         this.expirationMinutes = expirationMinutes;
     }
 
-    public String generateToken(String username, List<String> roles) {
+    public String generateToken(String username, List<String> roles, Long userId) {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(expirationMinutes * 60);
 
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .setSubject(username)
                 .setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(exp))
-                .addClaims(Map.of("roles", roles))
-                .signWith(key, SignatureAlgorithm.HS256)
-                .compact();
+                .addClaims(Map.of("roles", roles));
+        if (userId != null) {
+            builder.claim("uid", userId);
+        }
+        return builder.signWith(key, SignatureAlgorithm.HS256).compact();
     }
 
     public Claims parse(String token) {

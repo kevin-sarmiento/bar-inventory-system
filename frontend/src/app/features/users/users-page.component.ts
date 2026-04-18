@@ -34,8 +34,13 @@ import { DataTableComponent } from '../../shared/ui/data-table.component';
         <div class="actions"><button class="btn btn-secondary" type="button" (click)="reset()">Limpiar</button><button class="btn btn-primary" type="submit">Crear usuario</button></div>
       </form>
 
-      <app-data-table [rows]="rows()" [columns]="columns" (edit)="toggleActive($event)" (remove)="resetPassword($event)" />
-      <p class="section-subtitle">Editar cambia el estado. Eliminar restablece la contrasena temporal.</p>
+      <app-data-table
+        [rows]="rows()"
+        [columns]="columns"
+        [removeLabel]="'Cambiar contrasena'"
+        (edit)="toggleActive($event)"
+        (remove)="resetPassword($event)"
+      />
     </section>
   `,
   styles: [`
