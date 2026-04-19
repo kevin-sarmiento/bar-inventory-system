@@ -89,10 +89,17 @@ textarea {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 999px;
   padding: 0.85rem 1.25rem;
+  min-height: 2.9rem;
   font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
   cursor: pointer;
   transition: transform 180ms ease, filter 180ms ease, background 220ms ease, color 220ms ease;
 }

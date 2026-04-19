@@ -223,8 +223,16 @@ export class ReportsPageComponent implements OnInit {
           return EMPTY;
         })
       )
-      .subscribe((blob) => {
-        this.download.save(blob, filename);
+      .subscribe((response) => {
+        const resolvedName = this.download.filenameFromDisposition(
+          response.headers.get('content-disposition'),
+          filename
+        );
+        this.download.save(
+          response.body ?? new Blob(),
+          resolvedName,
+          response.headers.get('content-type')
+        );
         this.feedback.success('Exportacion lista', detail);
       });
   }

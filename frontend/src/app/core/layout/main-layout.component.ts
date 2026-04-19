@@ -253,6 +253,16 @@ import { AuthService } from '../services/auth.service';
       transition: background 220ms ease;
     }
 
+    :host-context(:root[data-theme='dark']) .brand-mark {
+      background: rgba(255, 255, 255, 0.06);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    }
+
+    :host-context(:root[data-theme='dark']) .brand-mark img {
+      mix-blend-mode: screen;
+      filter: brightness(1.2) saturate(1.14);
+    }
+
     .view {
       min-width: 0;
       padding-bottom: 1rem;
