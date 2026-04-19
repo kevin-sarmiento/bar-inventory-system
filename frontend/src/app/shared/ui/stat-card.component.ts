@@ -108,6 +108,48 @@ import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
       border-left-color: #3d5a80;
       background: linear-gradient(180deg, rgba(61, 90, 128, 0.2), rgba(255, 255, 255, 0.94));
     }
+
+    :host-context(:root[data-theme='dark']) .card {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    :host-context(:root[data-theme='dark']) .card p,
+    :host-context(:root[data-theme='dark']) .card span {
+      color: rgba(235, 243, 255, 0.82);
+    }
+
+    :host-context(:root[data-theme='dark']) .card-ventas {
+      background: linear-gradient(135deg, rgba(13, 148, 136, 0.24), rgba(21, 38, 42, 0.92));
+    }
+
+    :host-context(:root[data-theme='dark']) .card-ventas strong {
+      color: #59e1d5;
+    }
+
+    :host-context(:root[data-theme='dark']) .card-total {
+      background: linear-gradient(135deg, rgba(217, 119, 6, 0.24), rgba(45, 35, 22, 0.92));
+    }
+
+    :host-context(:root[data-theme='dark']) .card-total strong {
+      color: #ffbd66;
+    }
+
+    :host-context(:root[data-theme='dark']) .card-bajas {
+      background: linear-gradient(135deg, rgba(225, 29, 72, 0.22), rgba(45, 22, 33, 0.92));
+    }
+
+    :host-context(:root[data-theme='dark']) .card-bajas strong {
+      color: #ff7e9e;
+    }
+
+    :host-context(:root[data-theme='dark']) .card-valor {
+      background: linear-gradient(135deg, rgba(79, 70, 229, 0.24), rgba(28, 31, 52, 0.92));
+    }
+
+    :host-context(:root[data-theme='dark']) .card-valor strong {
+      color: #9f97ff;
+    }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })

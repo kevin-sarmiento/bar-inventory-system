@@ -84,8 +84,8 @@ import { DataColumn } from '../../core/models/api.models';
       padding: 1rem;
       border-bottom: 1px solid rgba(41, 50, 65, 0.08);
       vertical-align: top;
-      word-break: break-word;
-      overflow-wrap: anywhere;
+      word-break: normal;
+      overflow-wrap: break-word;
       max-width: 28rem;
     }
 
@@ -99,12 +99,17 @@ import { DataColumn } from '../../core/models/api.models';
     .badge {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       border-radius: 999px;
       background: rgba(62, 180, 137, 0.14);
       color: var(--color-ocean);
-      padding: 0.4rem 0.75rem;
+      min-width: 7.5rem;
+      padding: 0.5rem 0.95rem;
       font-size: 0.82rem;
       font-weight: 700;
+      line-height: 1.15;
+      text-align: center;
+      white-space: nowrap;
     }
 
     .badge-off {
@@ -115,9 +120,36 @@ import { DataColumn } from '../../core/models/api.models';
       background: rgba(244, 211, 94, 0.22);
     }
 
+    :host-context(:root[data-theme='dark']) .badge {
+      background: rgba(62, 180, 137, 0.22);
+      color: #ecfff7;
+      box-shadow: inset 0 0 0 1px rgba(124, 232, 188, 0.16);
+    }
+
+    :host-context(:root[data-theme='dark']) .badge-off {
+      background: rgba(238, 108, 77, 0.24);
+      color: #ffe7e0;
+      box-shadow: inset 0 0 0 1px rgba(255, 162, 138, 0.14);
+    }
+
+    :host-context(:root[data-theme='dark']) .badge-soft {
+      background: rgba(244, 211, 94, 0.22);
+      color: #fff4c9;
+      box-shadow: inset 0 0 0 1px rgba(255, 227, 132, 0.14);
+    }
+
     .actions {
       display: flex;
       gap: 0.55rem;
+      flex-wrap: wrap;
+      align-items: center;
+      min-width: max-content;
+    }
+
+    .actions .btn {
+      flex: 0 0 auto;
+      min-width: 7.75rem;
+      padding-inline: 1.15rem;
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush

@@ -12,11 +12,16 @@ import com.bar.inventory.dto.ShiftReportDto;
 import com.bar.inventory.dto.ShiftSalesByLocationDto;
 import com.bar.inventory.dto.ShiftSalesByUserDto;
 import com.bar.inventory.dto.StockViewDto;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -41,6 +46,7 @@ import java.time.ZoneOffset;
 
 @Service
 public class ReportService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final DatabaseClient client;
 
@@ -602,13 +608,13 @@ public class ReportService {
                         rows.stream()
                                 .map(row -> List.of(
                                         cellNumber(row.getAuditId()),
-                                        cellText(row.getTableName()),
+                                        cellText(auditTableLabel(row.getTableName())),
                                         cellText(row.getRecordPk()),
                                         cellText(auditActionLabel(row.getActionType())),
                                         cellDateTime(row.getChangedAt()),
                                         cellText(row.getChangedBy()),
-                                        cellText(row.getOldData()),
-                                        cellText(row.getNewData())
+                                        cellWrappedText(formatAuditPayload(row.getOldData())),
+                                        cellWrappedText(formatAuditPayload(row.getNewData()))
                                 ))
                                 .toList()));
     }
@@ -797,9 +803,10 @@ public class ReportService {
 
     private String toCsv(List<String> headers, List<List<String>> rows) {
         List<String> lines = new ArrayList<>();
-        lines.add(String.join(",", headers));
+        lines.add("sep=;");
+        lines.add(String.join(";", headers));
         for (List<String> row : rows) {
-            lines.add(String.join(",", row));
+            lines.add(String.join(";", row));
         }
         // BOM para que Excel reconozca UTF-8 (tildes y caracteres especiales).
         return "\uFEFF" + String.join("\n", lines);
@@ -808,6 +815,9 @@ public class ReportService {
     private String csvValue(Object value) {
         if (value == null) {
             return "";
+        }
+        if (value instanceof Instant instant) {
+            return escapeCsv(formatInstant(instant));
         }
         if (value instanceof BigDecimal decimal) {
             return escapeCsv(decimal.toPlainString());
@@ -834,6 +844,7 @@ public class ReportService {
             for (int i = 0; i < headers.size(); i++) {
                 sheet.autoSizeColumn(i);
             }
+            adjustSheetLayout(sheetName, sheet);
             filtersSheet.autoSizeColumn(0);
             filtersSheet.autoSizeColumn(1);
             workbook.write(output);
@@ -869,6 +880,7 @@ public class ReportService {
 
     private void writeDataRow(Sheet sheet, int rowIndex, List<ExcelCellValue> values, ExcelStyles styles) {
         var row = sheet.createRow(rowIndex);
+        int maxLines = 1;
         for (int i = 0; i < values.size(); i++) {
             ExcelCellValue value = values.get(i);
             Cell cell = row.createCell(i);
@@ -900,7 +912,16 @@ public class ReportService {
                     cell.setCellValue(value.value().toString());
                     cell.setCellStyle(styles.text());
                 }
+                case WRAPPED_TEXT -> {
+                    String text = value.value().toString();
+                    cell.setCellValue(text);
+                    cell.setCellStyle(styles.wrappedText());
+                    maxLines = Math.max(maxLines, lineCount(text));
+                }
             }
+        }
+        if (maxLines > 1) {
+            row.setHeightInPoints(sheet.getDefaultRowHeightInPoints() * Math.min(maxLines + 1, 18));
         }
     }
 
@@ -910,27 +931,92 @@ public class ReportService {
         Font headerFont = workbook.createFont();
         headerFont.setBold(true);
         headerFont.setColor(IndexedColors.WHITE.getIndex());
+        headerFont.setFontHeightInPoints((short) 11);
 
         CellStyle headerStyle = workbook.createCellStyle();
         headerStyle.setFont(headerFont);
-        headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+        headerStyle.setFillForegroundColor(IndexedColors.TEAL.getIndex());
         headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        headerStyle.setAlignment(HorizontalAlignment.CENTER);
+        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyBorders(headerStyle);
 
         CellStyle textStyle = workbook.createCellStyle();
+        textStyle.setAlignment(HorizontalAlignment.CENTER);
+        textStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyBorders(textStyle);
+
+        CellStyle wrappedTextStyle = workbook.createCellStyle();
+        wrappedTextStyle.setWrapText(true);
+        wrappedTextStyle.setAlignment(HorizontalAlignment.CENTER);
+        wrappedTextStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyBorders(wrappedTextStyle);
 
         CellStyle numberStyle = workbook.createCellStyle();
         numberStyle.setDataFormat(dataFormat.getFormat("0"));
+        numberStyle.setAlignment(HorizontalAlignment.CENTER);
+        numberStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyBorders(numberStyle);
 
         CellStyle amountStyle = workbook.createCellStyle();
         amountStyle.setDataFormat(dataFormat.getFormat("#,##0.00"));
+        amountStyle.setAlignment(HorizontalAlignment.CENTER);
+        amountStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyBorders(amountStyle);
 
         CellStyle dateTimeStyle = workbook.createCellStyle();
         dateTimeStyle.setDataFormat(dataFormat.getFormat("@"));
+        dateTimeStyle.setAlignment(HorizontalAlignment.CENTER);
+        dateTimeStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyBorders(dateTimeStyle);
 
         CellStyle dateStyle = workbook.createCellStyle();
         dateStyle.setDataFormat(dataFormat.getFormat("@"));
+        dateStyle.setAlignment(HorizontalAlignment.CENTER);
+        dateStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        applyBorders(dateStyle);
 
-        return new ExcelStyles(headerStyle, textStyle, numberStyle, amountStyle, dateTimeStyle, dateStyle);
+        return new ExcelStyles(headerStyle, textStyle, wrappedTextStyle, numberStyle, amountStyle, dateTimeStyle, dateStyle);
+    }
+
+    private void applyBorders(CellStyle style) {
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setTopBorderColor(IndexedColors.GREY_40_PERCENT.getIndex());
+        style.setRightBorderColor(IndexedColors.GREY_40_PERCENT.getIndex());
+        style.setBottomBorderColor(IndexedColors.GREY_40_PERCENT.getIndex());
+        style.setLeftBorderColor(IndexedColors.GREY_40_PERCENT.getIndex());
+    }
+
+    private void adjustSheetLayout(String sheetName, Sheet sheet) {
+        if ("Auditoria".equals(sheetName)) {
+            sheet.setColumnWidth(0, 14 * 256);
+            sheet.setColumnWidth(1, 20 * 256);
+            sheet.setColumnWidth(2, 14 * 256);
+            sheet.setColumnWidth(3, 16 * 256);
+            sheet.setColumnWidth(4, 24 * 256);
+            sheet.setColumnWidth(5, 20 * 256);
+            sheet.setColumnWidth(6, 62 * 256);
+            sheet.setColumnWidth(7, 62 * 256);
+        }
+        if ("Resumen de turnos".equals(sheetName)) {
+            sheet.setColumnWidth(0, 12 * 256);
+            sheet.setColumnWidth(1, 12 * 256);
+            sheet.setColumnWidth(2, 18 * 256);
+            sheet.setColumnWidth(3, 24 * 256);
+            sheet.setColumnWidth(4, 12 * 256);
+            sheet.setColumnWidth(5, 24 * 256);
+            sheet.setColumnWidth(6, 18 * 256);
+            sheet.setColumnWidth(7, 22 * 256);
+            sheet.setColumnWidth(8, 22 * 256);
+            sheet.setColumnWidth(9, 22 * 256);
+            sheet.setColumnWidth(10, 22 * 256);
+            sheet.setColumnWidth(11, 16 * 256);
+            sheet.setColumnWidth(12, 16 * 256);
+            sheet.setColumnWidth(13, 16 * 256);
+        }
     }
 
     private String formatInstant(Instant instant) {
@@ -944,6 +1030,10 @@ public class ReportService {
 
     private ExcelCellValue cellText(Object value) {
         return new ExcelCellValue(value == null ? null : value.toString(), ExcelCellType.TEXT);
+    }
+
+    private ExcelCellValue cellWrappedText(Object value) {
+        return new ExcelCellValue(value == null ? null : value.toString(), ExcelCellType.WRAPPED_TEXT);
     }
 
     private ExcelCellValue cellNumber(Number value) {
@@ -1126,6 +1216,98 @@ public class ReportService {
         return value == null ? "Todos" : value.toString();
     }
 
+    private int lineCount(String text) {
+        if (text == null || text.isBlank()) {
+            return 1;
+        }
+        return (int) text.lines().count();
+    }
+
+    private String formatAuditPayload(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return "";
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(payload);
+            List<String> lines = new ArrayList<>();
+            appendAuditLines(lines, "", root, preferredAuditOrder(root));
+            return String.join("\n", lines);
+        } catch (Exception ignored) {
+            return payload;
+        }
+    }
+
+    private void appendAuditLines(List<String> lines, String prefix, JsonNode node, List<String> preferredOrder) {
+        if (node == null || node.isNull()) {
+            lines.add(auditFieldLabel(prefix) + ": vacio");
+            return;
+        }
+        if (node.isObject()) {
+            List<String> processed = new ArrayList<>();
+            for (String key : preferredOrder) {
+                JsonNode child = node.get(key);
+                if (child != null) {
+                    processed.add(key);
+                    String nextPrefix = prefix.isBlank() ? key : prefix + "." + key;
+                    appendAuditLines(lines, nextPrefix, child, List.of());
+                }
+            }
+            node.fields().forEachRemaining(entry -> {
+                if (processed.contains(entry.getKey())) {
+                    return;
+                }
+                String nextPrefix = prefix.isBlank() ? entry.getKey() : prefix + "." + entry.getKey();
+                appendAuditLines(lines, nextPrefix, entry.getValue(), List.of());
+            });
+            return;
+        }
+        if (node.isArray()) {
+            for (int i = 0; i < node.size(); i++) {
+                String nextPrefix = prefix + "[" + i + "]";
+                appendAuditLines(lines, nextPrefix, node.get(i), List.of());
+            }
+            return;
+        }
+        lines.add(auditFieldLabel(prefix) + ": " + auditValueLabel(prefix, node.asText()));
+    }
+
+    private List<String> preferredAuditOrder(JsonNode root) {
+        if (root == null || !root.isObject()) {
+            return List.of();
+        }
+        return List.of(
+                "status",
+                "notes",
+                "reason",
+                "reference_text",
+                "transaction_type",
+                "role_name",
+                "sale_number",
+                "count_number",
+                "product_name",
+                "location_name",
+                "user_id",
+                "shift_id",
+                "sale_id",
+                "transaction_id",
+                "count_id",
+                "location_id",
+                "product_id",
+                "supplier_id",
+                "cashier_user_id",
+                "scheduled_start",
+                "scheduled_end",
+                "actual_start",
+                "actual_end",
+                "count_date",
+                "created_by",
+                "approved_by",
+                "created_at",
+                "updated_at",
+                "total_amount"
+        );
+    }
+
     private String nullIfBlank(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -1142,6 +1324,113 @@ public class ReportService {
             case "UPDATE" -> "Cambio";
             case "DELETE" -> "Baja";
             default -> actionType.trim();
+        };
+    }
+
+    private String auditTableLabel(String tableName) {
+        if (tableName == null || tableName.isBlank()) {
+            return "";
+        }
+        return switch (tableName.trim()) {
+            case "work_shifts" -> "Turnos";
+            case "sales" -> "Ventas";
+            case "inventory_transactions" -> "Transacciones";
+            case "physical_counts" -> "Conteos fisicos";
+            case "menu_items" -> "Menu";
+            case "products" -> "Productos";
+            case "locations" -> "Ubicaciones";
+            case "app_users" -> "Usuarios";
+            default -> tableName.trim();
+        };
+    }
+
+    private String auditFieldLabel(String fieldPath) {
+        if (fieldPath == null || fieldPath.isBlank()) {
+            return "Valor";
+        }
+        return switch (fieldPath.trim()) {
+            case "notes" -> "Notas";
+            case "status" -> "Estado";
+            case "user_id" -> "ID usuario";
+            case "shift_id" -> "ID turno";
+            case "role_name" -> "Rol";
+            case "actual_end" -> "Salida real";
+            case "actual_start" -> "Entrada real";
+            case "created_at" -> "Creado el";
+            case "updated_at" -> "Actualizado el";
+            case "created_by" -> "Creado por";
+            case "approved_by" -> "Aprobado por";
+            case "location_id" -> "ID sede";
+            case "location_name" -> "Sede";
+            case "sale_id" -> "ID venta";
+            case "sale_number" -> "Numero de venta";
+            case "count_date" -> "Fecha de conteo";
+            case "count_number" -> "Numero de conteo";
+            case "reason" -> "Motivo";
+            case "reference_text" -> "Referencia";
+            case "supplier_id" -> "ID proveedor";
+            case "product_id" -> "ID producto";
+            case "product_name" -> "Producto";
+            case "transaction_id" -> "ID transaccion";
+            case "transaction_number" -> "Numero de transaccion";
+            case "transaction_type" -> "Tipo de transaccion";
+            case "cashier_user_id" -> "ID cajero";
+            case "scheduled_start" -> "Inicio programado";
+            case "scheduled_end" -> "Fin programado";
+            case "full_name" -> "Nombre completo";
+            case "username" -> "Usuario";
+            case "total_amount" -> "Monto total";
+            default -> fieldPath.replace('_', ' ');
+        };
+    }
+
+    private String auditValueLabel(String fieldPath, String value) {
+        if (value == null || value.isBlank()) {
+            return "vacio";
+        }
+        String normalizedField = fieldPath == null ? "" : fieldPath.trim();
+        return switch (normalizedField) {
+            case "status" -> auditStatusLabel(value);
+            case "role_name" -> roleNameLabel(value);
+            case "transaction_type" -> inventoryTransactionTypeEs(value);
+            case "created_at", "updated_at", "scheduled_start", "scheduled_end", "actual_start", "actual_end", "count_date" -> formatAuditDateTime(value);
+            case "total_amount" -> formatAuditAmount(value);
+            default -> value;
+        };
+    }
+
+    private String formatAuditDateTime(String raw) {
+        try {
+            return OffsetDateTime.parse(raw).atZoneSameInstant(ZoneId.of("America/Bogota"))
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (Exception ignored) {
+            return raw;
+        }
+    }
+
+    private String formatAuditAmount(String raw) {
+        try {
+            return new BigDecimal(raw).stripTrailingZeros().toPlainString();
+        } catch (Exception ignored) {
+            return raw;
+        }
+    }
+
+    private String auditStatusLabel(String status) {
+        if (status == null || status.isBlank()) {
+            return "";
+        }
+        return switch (status.trim()) {
+            case "SCHEDULED" -> "Programado";
+            case "IN_PROGRESS" -> "En curso";
+            case "COMPLETED" -> "Completado";
+            case "MISSED" -> "No asistio";
+            case "CANCELLED" -> "Cancelado";
+            case "PAID" -> "Pagada";
+            case "OPEN" -> "Abierta";
+            case "DRAFT" -> "Borrador";
+            case "POSTED" -> "Publicado";
+            default -> status.trim();
         };
     }
 
@@ -1315,6 +1604,7 @@ public class ReportService {
 
     private enum ExcelCellType {
         TEXT,
+        WRAPPED_TEXT,
         NUMBER,
         AMOUNT,
         DATE_TIME,
@@ -1327,6 +1617,7 @@ public class ReportService {
     private record ExcelStyles(
             CellStyle header,
             CellStyle text,
+            CellStyle wrappedText,
             CellStyle number,
             CellStyle amount,
             CellStyle dateTime,

@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_CONFIG } from '../config/api.config';
@@ -64,10 +64,11 @@ export class ReportApiService {
     return this.http.get<ShiftSalesByLocationDto[]>(this.url('/shifts/by-location'), { params: this.params({ from, to, userId }) });
   }
 
-  download(path: string, params?: Record<string, string | number | undefined>): Observable<Blob> {
+  download(path: string, params?: Record<string, string | number | undefined>): Observable<HttpResponse<Blob>> {
     return this.http.get(this.url(path), {
       params: this.params(params),
-      responseType: 'blob'
+      responseType: 'blob',
+      observe: 'response'
     });
   }
 

@@ -164,6 +164,65 @@ import { ReportApiService } from '../../core/services/report-api.service';
       color: #4338ca;
     }
 
+    :host-context(:root[data-theme='dark']) .hero {
+      background: linear-gradient(135deg, rgba(21, 33, 47, 0.96), rgba(19, 30, 43, 0.94));
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    :host-context(:root[data-theme='dark']) .hero-art img {
+      mix-blend-mode: screen;
+      opacity: 0.98;
+      filter: brightness(1.18) saturate(1.12) drop-shadow(0 18px 36px rgba(62, 180, 137, 0.14));
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary {
+      background: linear-gradient(180deg, rgba(22, 33, 47, 0.95), rgba(19, 29, 42, 0.94));
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__label,
+    :host-context(:root[data-theme='dark']) .daily-summary__hint {
+      color: rgba(235, 243, 255, 0.82);
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile--sales {
+      background: linear-gradient(180deg, rgba(13, 148, 136, 0.22), rgba(24, 40, 45, 0.92));
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile--sales strong {
+      color: #59e1d5;
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile--money {
+      background: linear-gradient(180deg, rgba(217, 119, 6, 0.22), rgba(45, 35, 22, 0.92));
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile--money strong {
+      color: #ffbd66;
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile--stock {
+      background: linear-gradient(180deg, rgba(225, 29, 72, 0.2), rgba(45, 22, 33, 0.92));
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile--stock strong {
+      color: #ff7e9e;
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile--inv {
+      background: linear-gradient(180deg, rgba(79, 70, 229, 0.22), rgba(28, 31, 52, 0.92));
+    }
+
+    :host-context(:root[data-theme='dark']) .daily-summary__tile--inv strong {
+      color: #9f97ff;
+    }
+
     @keyframes floatGlow {
       0%, 100% {
         transform: translateY(0px);
