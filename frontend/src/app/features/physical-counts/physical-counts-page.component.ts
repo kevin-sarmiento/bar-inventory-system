@@ -11,13 +11,14 @@ import { PhysicalCountApiService } from '../../core/services/operations-api.serv
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
 import { physicalCountStatusEs } from '../../shared/i18n/operations-labels';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
+import { SearchSelectComponent, SearchSelectOption } from '../../shared/ui/search-select.component';
 
 type CountRow = PhysicalCount & { displayStatus: string; ubicacion: string };
 
 @Component({
   selector: 'app-physical-counts-page',
   standalone: true,
-  imports: [ReactiveFormsModule, NgFor, NgIf, DataTableComponent],
+  imports: [ReactiveFormsModule, NgFor, NgIf, DataTableComponent, SearchSelectComponent],
   template: `
     <section class="page-stack">
       <header class="page-header">
@@ -33,9 +34,12 @@ type CountRow = PhysicalCount & { displayStatus: string; ubicacion: string };
           <div class="field"><label>Numero de conteo</label><input class="input" formControlName="countNumber"></div>
           <div class="field">
             <label>Ubicacion</label>
-            <select class="select" formControlName="locationId">
-              <option *ngFor="let item of locations()" [ngValue]="item.id">{{ item.locationName }}</option>
-            </select>
+            <app-search-select
+              formControlName="locationId"
+              [options]="locationOptions()"
+              [placeholder]="'Selecciona una ubicacion'"
+              [searchPlaceholder]="'Buscar ubicacion...'"
+            />
           </div>
           <div class="field"><label>Fecha</label><input type="datetime-local" class="input" formControlName="countDate"></div>
         </div>
@@ -47,9 +51,12 @@ type CountRow = PhysicalCount & { displayStatus: string; ubicacion: string };
             <div class="form-grid four-cols">
               <div class="field">
                 <label>Producto</label>
-                <select class="select" formControlName="productId">
-                  <option *ngFor="let item of products()" [ngValue]="item.id">{{ item.name }}</option>
-                </select>
+                <app-search-select
+                  formControlName="productId"
+                  [options]="productOptions()"
+                  [placeholder]="'Selecciona un producto'"
+                  [searchPlaceholder]="'Buscar producto...'"
+                />
               </div>
               <div class="field"><label>Teorico base</label><input type="number" class="input" formControlName="theoreticalQtyBase"></div>
               <div class="field"><label>Real base</label><input type="number" class="input" formControlName="actualQtyBase"></div>
@@ -110,6 +117,21 @@ export class PhysicalCountsPageComponent implements OnInit {
   protected readonly searchQuery = signal('');
   protected readonly locations = signal<Location[]>([]);
   protected readonly products = signal<Product[]>([]);
+  protected readonly locationOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.locations().map((location) => ({
+      value: location.id,
+      label: location.locationName,
+      secondaryLabel: location.description ?? null
+    }))
+  );
+  protected readonly productOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.products().map((product) => ({
+      value: product.id,
+      label: product.name,
+      secondaryLabel: product.sku ?? null,
+      keywords: product.notes ?? null
+    }))
+  );
   protected readonly tableRows = computed(() => {
     const locs = this.locations();
     const map = new Map(locs.map((l) => [l.id, l.locationName]));

@@ -11,6 +11,7 @@ CREATE SEQUENCE sale_public_number_seq;
 SELECT setval(
  'sale_public_number_seq',
         GREATEST(
+                1,
                 COALESCE((SELECT MAX(sale_id) FROM sales), 0),
                 COALESCE(
                         (SELECT MAX(

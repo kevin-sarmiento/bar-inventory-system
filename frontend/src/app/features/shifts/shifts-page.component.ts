@@ -13,6 +13,7 @@ import { ShiftApiService } from '../../core/services/operations-api.service';
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
 import { roleNameEs, shiftStatusEs } from '../../shared/i18n/operations-labels';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
+import { SearchSelectComponent, SearchSelectOption } from '../../shared/ui/search-select.component';
 
 type ShiftRow = ShiftDto & { displayStatus: string; displayRole: string };
 
@@ -21,7 +22,7 @@ type ShiftStatusFilter = 'ALL' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CA
 @Component({
   selector: 'app-shifts-page',
   standalone: true,
-  imports: [ReactiveFormsModule, DataTableComponent, NgFor, NgIf],
+  imports: [ReactiveFormsModule, DataTableComponent, NgFor, NgIf, SearchSelectComponent],
   template: `
     <section class="page-stack">
       <header class="page-header">
@@ -36,15 +37,21 @@ type ShiftStatusFilter = 'ALL' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CA
         <div class="form-grid three-cols">
           <div class="field">
             <label>Usuario</label>
-            <select class="select" formControlName="userId">
-              <option *ngFor="let user of users()" [ngValue]="user.id">{{ user.fullName }}</option>
-            </select>
+            <app-search-select
+              formControlName="userId"
+              [options]="userOptions()"
+              [placeholder]="'Selecciona un usuario'"
+              [searchPlaceholder]="'Buscar usuario...'"
+            />
           </div>
           <div class="field">
             <label>Ubicacion</label>
-            <select class="select" formControlName="locationId">
-              <option *ngFor="let item of locations()" [ngValue]="item.id">{{ item.locationName }}</option>
-            </select>
+            <app-search-select
+              formControlName="locationId"
+              [options]="locationOptions()"
+              [placeholder]="'Selecciona una ubicacion'"
+              [searchPlaceholder]="'Buscar ubicacion...'"
+            />
           </div>
           <div class="field">
             <label>Rol</label>
@@ -159,6 +166,21 @@ export class ShiftsPageComponent implements OnInit {
   protected readonly users = signal<UserAdmin[]>([]);
   protected readonly locations = signal<Location[]>([]);
   protected readonly editing = signal<ShiftDto | null>(null);
+  protected readonly userOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.users().map((user) => ({
+      value: user.id,
+      label: user.fullName,
+      secondaryLabel: user.username,
+      keywords: [user.email, ...(user.roles ?? [])].filter(Boolean).join(' ')
+    }))
+  );
+  protected readonly locationOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.locations().map((location) => ({
+      value: location.id,
+      label: location.locationName,
+      secondaryLabel: location.description ?? null
+    }))
+  );
   protected readonly roleOptions = [
     { value: 'ADMINISTRADOR', label: 'Administrador' },
     { value: 'GERENTE', label: 'Gerente' },

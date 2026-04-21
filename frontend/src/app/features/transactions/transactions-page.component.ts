@@ -11,6 +11,7 @@ import { TransactionApiService } from '../../core/services/operations-api.servic
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
 import { inventoryTransactionStatusEs, inventoryTransactionTypeEs } from '../../shared/i18n/operations-labels';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
+import { SearchSelectComponent, SearchSelectOption } from '../../shared/ui/search-select.component';
 
 type TxRow = InventoryTransaction & { displayType: string; displayStatus: string };
 
@@ -20,7 +21,7 @@ type TransactionStatusOption = { value: string; label: string };
 @Component({
   selector: 'app-transactions-page',
   standalone: true,
-  imports: [ReactiveFormsModule, NgFor, NgIf, DataTableComponent],
+  imports: [ReactiveFormsModule, NgFor, NgIf, DataTableComponent, SearchSelectComponent],
   template: `
     <section class="page-stack">
       <header class="page-header">
@@ -46,24 +47,33 @@ type TransactionStatusOption = { value: string; label: string };
           </div>
           <div class="field">
             <label>Origen</label>
-            <select class="select" formControlName="sourceLocationId">
-              <option [ngValue]="null">Sin origen</option>
-              <option *ngFor="let item of locations()" [ngValue]="item.id">{{ item.locationName }}</option>
-            </select>
+            <app-search-select
+              formControlName="sourceLocationId"
+              [options]="locationOptions()"
+              [placeholder]="'Sin origen'"
+              [searchPlaceholder]="'Buscar ubicacion...'"
+              [allowClear]="true"
+            />
           </div>
           <div class="field">
             <label>Destino</label>
-            <select class="select" formControlName="targetLocationId">
-              <option [ngValue]="null">Sin destino</option>
-              <option *ngFor="let item of locations()" [ngValue]="item.id">{{ item.locationName }}</option>
-            </select>
+            <app-search-select
+              formControlName="targetLocationId"
+              [options]="locationOptions()"
+              [placeholder]="'Sin destino'"
+              [searchPlaceholder]="'Buscar ubicacion...'"
+              [allowClear]="true"
+            />
           </div>
           <div class="field">
             <label>Proveedor</label>
-            <select class="select" formControlName="supplierId">
-              <option [ngValue]="null">Sin proveedor</option>
-              <option *ngFor="let item of suppliers()" [ngValue]="item.id">{{ item.name }}</option>
-            </select>
+            <app-search-select
+              formControlName="supplierId"
+              [options]="supplierOptions()"
+              [placeholder]="'Sin proveedor'"
+              [searchPlaceholder]="'Buscar proveedor...'"
+              [allowClear]="true"
+            />
           </div>
           <div class="field">
             <label>Estado inicial</label>
@@ -81,15 +91,21 @@ type TransactionStatusOption = { value: string; label: string };
             <div class="form-grid three-cols">
               <div class="field">
                 <label>Producto</label>
-                <select class="select" formControlName="productId">
-                  <option *ngFor="let item of products()" [ngValue]="item.id">{{ item.name }}</option>
-                </select>
+                <app-search-select
+                  formControlName="productId"
+                  [options]="productOptions()"
+                  [placeholder]="'Selecciona un producto'"
+                  [searchPlaceholder]="'Buscar producto...'"
+                />
               </div>
               <div class="field">
                 <label>Unidad</label>
-                <select class="select" formControlName="unitId">
-                  <option *ngFor="let item of units()" [ngValue]="item.id">{{ item.name }}</option>
-                </select>
+                <app-search-select
+                  formControlName="unitId"
+                  [options]="unitOptions()"
+                  [placeholder]="'Selecciona una unidad'"
+                  [searchPlaceholder]="'Buscar unidad...'"
+                />
               </div>
               <div class="field"><label>Cantidad</label><input type="number" class="input" formControlName="quantity"></div>
               <div class="field"><label>Costo</label><input type="number" class="input" formControlName="unitCost"></div>
@@ -180,6 +196,36 @@ export class TransactionsPageComponent implements OnInit {
   protected readonly suppliers = signal<Supplier[]>([]);
   protected readonly products = signal<Product[]>([]);
   protected readonly units = signal<Unit[]>([]);
+  protected readonly locationOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.locations().map((location) => ({
+      value: location.id,
+      label: location.locationName,
+      secondaryLabel: location.description ?? null
+    }))
+  );
+  protected readonly supplierOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.suppliers().map((supplier) => ({
+      value: supplier.id,
+      label: supplier.name,
+      secondaryLabel: supplier.phone || supplier.email || null,
+      keywords: [supplier.address, supplier.email, supplier.phone].filter(Boolean).join(' ')
+    }))
+  );
+  protected readonly productOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.products().map((product) => ({
+      value: product.id,
+      label: product.name,
+      secondaryLabel: product.sku ?? null,
+      keywords: [product.barcode, product.notes].filter(Boolean).join(' ')
+    }))
+  );
+  protected readonly unitOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.units().map((unit) => ({
+      value: unit.id,
+      label: unit.name,
+      secondaryLabel: unit.code
+    }))
+  );
   protected readonly types: TransactionTypeOption[] = [
     { value: 'OPENING_STOCK', label: 'Stock inicial' },
     { value: 'PURCHASE', label: 'Compra' },

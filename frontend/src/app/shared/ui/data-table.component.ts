@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe, NgFor, NgIf, NgSwitch, NgSwitchCase, NgSwitchDefault } from '@angular/common';
 import { DataColumn } from '../../core/models/api.models';
+
+let dataTableSearchSeq = 0;
 
 @Component({
   selector: 'app-data-table',
@@ -8,18 +10,32 @@ import { DataColumn } from '../../core/models/api.models';
   imports: [NgFor, NgIf, NgSwitch, NgSwitchCase, NgSwitchDefault, DatePipe, CurrencyPipe],
   template: `
     <div class="table-shell shell-card">
-      <div class="table-responsive" *ngIf="rows.length; else emptyState">
+      <div class="table-search" *ngIf="clientSearch() && rows().length">
+        <div class="field field-grow">
+          <label [attr.for]="searchFieldId">{{ searchLabel() }}</label>
+          <input
+            [id]="searchFieldId"
+            class="input"
+            type="search"
+            [placeholder]="searchPlaceholder()"
+            [value]="searchTerm()"
+            (input)="onSearchInput($event)"
+          />
+        </div>
+      </div>
+
+      <div class="table-responsive" *ngIf="displayRows().length; else emptyState">
         <table>
           <thead>
             <tr>
-              <th *ngFor="let column of columns">{{ column.label }}</th>
-              <th *ngIf="actionsVisible">Acciones</th>
+              <th *ngFor="let column of columns()">{{ column.label }}</th>
+              <th *ngIf="actionsVisible()">Acciones</th>
             </tr>
           </thead>
 
           <tbody>
-            <tr *ngFor="let row of rows">
-              <td *ngFor="let column of columns">
+            <tr *ngFor="let row of displayRows()">
+              <td *ngFor="let column of columns()">
                 <ng-container [ngSwitch]="column.type ?? 'text'">
                   <span *ngSwitchCase="'boolean'" class="badge" [class.badge-off]="!asBoolean(resolve(row, column.key))">
                     {{ asBoolean(resolve(row, column.key)) ? 'Activo' : 'Inactivo' }}
@@ -37,9 +53,9 @@ import { DataColumn } from '../../core/models/api.models';
                 </ng-container>
               </td>
 
-              <td *ngIf="actionsVisible" class="actions">
-                <button *ngIf="!hideEditAction" type="button" class="btn btn-secondary" (click)="edit.emit(row)">{{ editLabel }}</button>
-                <button *ngIf="!hideRemoveAction" type="button" class="btn btn-accent" (click)="remove.emit(row)">{{ removeLabel }}</button>
+              <td *ngIf="actionsVisible()" class="actions">
+                <button *ngIf="!hideEditAction()" type="button" class="btn btn-secondary" (click)="edit.emit(row)">{{ editLabel() }}</button>
+                <button *ngIf="!hideRemoveAction()" type="button" class="btn btn-accent" (click)="remove.emit(row)">{{ removeLabel() }}</button>
               </td>
             </tr>
           </tbody>
@@ -48,9 +64,13 @@ import { DataColumn } from '../../core/models/api.models';
     </div>
 
     <ng-template #emptyState>
-      <div class="state-box">
-        <strong>{{ emptyTitle }}</strong>
-        <p>{{ emptyDescription }}</p>
+      <div class="state-box" *ngIf="rows().length === 0">
+        <strong>{{ emptyTitle() }}</strong>
+        <p>{{ emptyDescription() }}</p>
+      </div>
+      <div class="state-box" *ngIf="rows().length > 0 && displayRows().length === 0">
+        <strong>{{ emptyFilterTitle() }}</strong>
+        <p>{{ emptyFilterDescription() }}</p>
       </div>
     </ng-template>
   `,
@@ -60,6 +80,23 @@ import { DataColumn } from '../../core/models/api.models';
       max-width: 100%;
       min-width: 0;
       overflow: hidden;
+    }
+
+    .table-search {
+      padding: 0.5rem 0.65rem 0.85rem;
+      border-bottom: 1px solid rgba(41, 50, 65, 0.08);
+    }
+
+    .table-search .field {
+      margin: 0;
+    }
+
+    .field-grow {
+      width: 100%;
+    }
+
+    :host-context(:root[data-theme='dark']) .table-search {
+      border-bottom-color: rgba(255, 255, 255, 0.08);
     }
 
     .table-responsive {
@@ -155,21 +192,68 @@ import { DataColumn } from '../../core/models/api.models';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DataTableComponent {
-  @Input({ required: true }) rows: unknown[] = [];
-  @Input({ required: true }) columns: DataColumn<any>[] = [];
-  @Input() showActions = true;
-  @Input() hideEditAction = false;
-  @Input() hideRemoveAction = false;
-  @Input() editLabel = 'Editar';
-  @Input() removeLabel = 'Eliminar';
-  @Input() emptyTitle = 'Sin datos';
-  @Input() emptyDescription = 'Aun no hay registros para mostrar.';
+  readonly rows = input.required<unknown[]>();
+  readonly columns = input.required<DataColumn<any>[]>();
+  readonly showActions = input(true);
+  readonly hideEditAction = input(false);
+  readonly hideRemoveAction = input(false);
+  readonly editLabel = input('Editar');
+  readonly removeLabel = input('Eliminar');
+  readonly emptyTitle = input('Sin datos');
+  readonly emptyDescription = input('Aun no hay registros para mostrar.');
+  readonly clientSearch = input(false);
+  readonly searchLabel = input('Buscar');
+  readonly searchPlaceholder = input('Filtrar por texto visible en la tabla...');
+  readonly emptyFilterTitle = input('Sin coincidencias');
+  readonly emptyFilterDescription = input('Prueba con otro texto de busqueda.');
 
-  @Output() edit = new EventEmitter<any>();
-  @Output() remove = new EventEmitter<any>();
+  readonly edit = output<any>();
+  readonly remove = output<any>();
 
-  protected get actionsVisible(): boolean {
-    return this.showActions && (!this.hideEditAction || !this.hideRemoveAction);
+  protected readonly searchFieldId = `data-table-search-${++dataTableSearchSeq}`;
+  protected readonly searchTerm = signal('');
+
+  protected readonly displayRows = computed(() => {
+    const rows = this.rows();
+    const columns = this.columns();
+    if (!this.clientSearch()) {
+      return rows;
+    }
+    const q = this.searchTerm().trim().toLowerCase();
+    if (!q) {
+      return rows;
+    }
+    return rows.filter((row) => this.rowMatches(row, columns, q));
+  });
+
+  protected readonly actionsVisible = computed(
+    () => this.showActions() && (!this.hideEditAction() || !this.hideRemoveAction())
+  );
+
+  protected onSearchInput(event: Event): void {
+    const value = (event.target as HTMLInputElement | null)?.value ?? '';
+    this.searchTerm.set(value);
+  }
+
+  private rowMatches(row: unknown, columns: DataColumn<any>[], q: string): boolean {
+    for (const col of columns) {
+      const raw = this.resolve(row, col.key);
+      const haystack = this.cellSearchText(raw, col.type ?? 'text').toLowerCase();
+      if (haystack.includes(q)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private cellSearchText(raw: string | number | boolean | null, type: string): string {
+    if (raw === null || raw === undefined) {
+      return '';
+    }
+    if (type === 'boolean') {
+      return (raw ? 'activo true si' : 'inactivo false no');
+    }
+    return String(raw);
   }
 
   protected resolve(row: unknown, key: string): string | number | boolean | null {

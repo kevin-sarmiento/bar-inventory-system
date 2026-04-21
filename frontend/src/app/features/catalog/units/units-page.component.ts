@@ -48,7 +48,14 @@ type UnitRow = Unit & { unitTypeLabel: string };
         </div>
       </form>
 
-      <app-data-table [rows]="rows()" [columns]="columns" (edit)="edit($event)" (remove)="remove($event)" />
+      <app-data-table
+        [rows]="rows()"
+        [columns]="columns"
+        [clientSearch]="true"
+        [searchPlaceholder]="'Codigo, nombre o descripcion...'"
+        (edit)="edit($event)"
+        (remove)="remove($event)"
+      />
     </section>
   `,
   styles: [`.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.actions{display:flex;justify-content:flex-end;gap:.75rem}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`],

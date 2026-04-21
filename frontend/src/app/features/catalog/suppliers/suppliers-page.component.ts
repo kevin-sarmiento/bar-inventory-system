@@ -22,7 +22,14 @@ import { DataTableComponent } from '../../../shared/ui/data-table.component';
         </div>
         <div class="actions"><button class="btn btn-secondary" type="button" (click)="reset()">Limpiar</button><button class="btn btn-primary" type="submit" [disabled]="form.invalid">{{ editing() ? 'Actualizar' : 'Crear' }}</button></div>
       </form>
-      <app-data-table [rows]="rows()" [columns]="columns" (edit)="edit($event)" (remove)="remove($event)" />
+      <app-data-table
+        [rows]="rows()"
+        [columns]="columns"
+        [clientSearch]="true"
+        [searchPlaceholder]="'Nombre, contacto, telefono, email...'"
+        (edit)="edit($event)"
+        (remove)="remove($event)"
+      />
     </section>
   `,
   styles: [`.form-card{padding:1.25rem;display:grid;gap:1rem}.two-cols{grid-template-columns:repeat(2,minmax(0,1fr))}.actions{display:flex;justify-content:flex-end;gap:.75rem}@media (max-width:900px){.two-cols{grid-template-columns:1fr}}`],

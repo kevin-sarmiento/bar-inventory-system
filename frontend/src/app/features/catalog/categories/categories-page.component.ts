@@ -40,6 +40,8 @@ import { CategoryService } from './category.service';
       <app-data-table
         [rows]="categories()"
         [columns]="columns"
+        [clientSearch]="true"
+        [searchPlaceholder]="'Nombre o descripcion...'"
         [emptyTitle]="'No hay categorias registradas'"
         [emptyDescription]="'Crea la primera categoria para arrancar el catalogo.'"
         (edit)="editCategory($event)"

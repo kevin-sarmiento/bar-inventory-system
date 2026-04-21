@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { NgFor } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { forkJoin } from 'rxjs';
@@ -7,23 +7,39 @@ import { MenuItem, MenuItemPayload, Recipe } from '../../core/models/catalog.mod
 import { MenuApiService, RecipeApiService } from '../../core/services/catalog-api.service';
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
+import { SearchSelectComponent, SearchSelectOption } from '../../shared/ui/search-select.component';
 
 @Component({
   selector: 'app-menu-page',
   standalone: true,
-  imports: [ReactiveFormsModule, DataTableComponent, NgFor],
+  imports: [ReactiveFormsModule, DataTableComponent, NgFor, SearchSelectComponent],
   template: `
     <section class="page-stack">
       <header class="page-header"><div><span class="chip">Fase 2</span><h2 class="section-title">Menú</h2><p class="section-subtitle">Ítems vendibles asociados a recetas.</p></div></header>
       <form class="shell-card form-card" [formGroup]="form" (ngSubmit)="save()">
         <div class="form-grid three-cols">
           <div class="field"><label>Nombre menú</label><input class="input" formControlName="menuName"></div>
-          <div class="field"><label>Receta</label><select class="select" formControlName="recipeId"><option *ngFor="let recipe of recipes()" [ngValue]="recipe.id">{{ recipe.recipeName }}</option></select></div>
+          <div class="field">
+            <label>Receta</label>
+            <app-search-select
+              formControlName="recipeId"
+              [options]="recipeOptions()"
+              [placeholder]="'Selecciona una receta'"
+              [searchPlaceholder]="'Buscar receta...'"
+            />
+          </div>
           <div class="field"><label>Precio venta</label><input type="number" class="input" formControlName="salePrice"></div>
         </div>
         <div class="actions"><button class="btn btn-secondary" type="button" (click)="reset()">Limpiar</button><button class="btn btn-primary" type="submit">{{ editing() ? 'Actualizar' : 'Crear' }}</button></div>
       </form>
-      <app-data-table [rows]="rows()" [columns]="columns" (edit)="edit($event)" (remove)="remove($event)" />
+      <app-data-table
+        [rows]="rows()"
+        [columns]="columns"
+        [clientSearch]="true"
+        [searchPlaceholder]="'Nombre de carta, producto o precio...'"
+        (edit)="edit($event)"
+        (remove)="remove($event)"
+      />
     </section>
   `,
   styles: [`.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.actions{display:flex;justify-content:flex-end;gap:.75rem}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`],
@@ -37,6 +53,13 @@ export class MenuPageComponent implements OnInit {
   protected readonly rows = signal<MenuItem[]>([]);
   protected readonly recipes = signal<Recipe[]>([]);
   protected readonly editing = signal<MenuItem | null>(null);
+  protected readonly recipeOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.recipes().map((recipe) => ({
+      value: recipe.id,
+      label: recipe.recipeName,
+      secondaryLabel: recipe.description ?? null
+    }))
+  );
   protected readonly columns: DataColumn<MenuItem>[] = [
     { key: 'menuName', label: 'Nombre' },
     { key: 'recipeId', label: 'Receta ID' },

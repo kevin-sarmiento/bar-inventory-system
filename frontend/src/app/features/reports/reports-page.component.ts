@@ -58,8 +58,22 @@ type MovementRow = MovementReportDto & { displayType: string; displayStatus: str
       </form>
 
       <div class="reports-tables">
-        <app-data-table [rows]="stock()" [columns]="stockColumns" [showActions]="false" [emptyTitle]="'Sin stock reportado'" />
-        <app-data-table [rows]="movementRows()" [columns]="movementColumns" [showActions]="false" [emptyTitle]="'Sin movimientos reportados'" />
+        <app-data-table
+          [rows]="stock()"
+          [columns]="stockColumns"
+          [showActions]="false"
+          [clientSearch]="true"
+          [searchPlaceholder]="'Producto, ubicacion, lote...'"
+          [emptyTitle]="'Sin stock reportado'"
+        />
+        <app-data-table
+          [rows]="movementRows()"
+          [columns]="movementColumns"
+          [showActions]="false"
+          [clientSearch]="true"
+          [searchPlaceholder]="'Numero, tipo, estado, referencia...'"
+          [emptyTitle]="'Sin movimientos reportados'"
+        />
       </div>
     </section>
   `,

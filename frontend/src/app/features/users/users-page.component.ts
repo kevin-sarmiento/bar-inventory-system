@@ -37,6 +37,8 @@ import { DataTableComponent } from '../../shared/ui/data-table.component';
       <app-data-table
         [rows]="rows()"
         [columns]="columns"
+        [clientSearch]="true"
+        [searchPlaceholder]="'Usuario, nombre, email, rol...'"
         [removeLabel]="'Cambiar contrasena'"
         (edit)="toggleActive($event)"
         (remove)="resetPassword($event)"

@@ -11,6 +11,7 @@ import { SalesApiService, ShiftApiService } from '../../core/services/operations
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
 import { saleStatusEs, shiftStatusEs } from '../../shared/i18n/operations-labels';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
+import { SearchSelectComponent, SearchSelectOption } from '../../shared/ui/search-select.component';
 
 type SaleStatusOption = { value: string; label: string };
 
@@ -24,7 +25,7 @@ type SaleRow = Sale & {
 @Component({
   selector: 'app-sales-page',
   standalone: true,
-  imports: [ReactiveFormsModule, NgFor, NgIf, DataTableComponent],
+  imports: [ReactiveFormsModule, NgFor, NgIf, DataTableComponent, SearchSelectComponent],
   template: `
     <section class="page-stack">
       <header class="page-header">
@@ -39,16 +40,22 @@ type SaleRow = Sale & {
         <div class="form-grid three-cols">
           <div class="field">
             <label>Ubicacion</label>
-            <select class="select" formControlName="locationId">
-              <option *ngFor="let item of locations()" [ngValue]="item.id">{{ item.locationName }}</option>
-            </select>
+            <app-search-select
+              formControlName="locationId"
+              [options]="locationOptions()"
+              [placeholder]="'Selecciona una ubicacion'"
+              [searchPlaceholder]="'Buscar ubicacion...'"
+            />
           </div>
           <div class="field">
             <label>Turno (opcional)</label>
-            <select class="select" formControlName="shiftId">
-              <option [ngValue]="null">Sin turno</option>
-              <option *ngFor="let sh of shiftsForSale()" [ngValue]="sh.id">{{ shiftLabel(sh) }}</option>
-            </select>
+            <app-search-select
+              formControlName="shiftId"
+              [options]="shiftOptions()"
+              [placeholder]="'Sin turno'"
+              [searchPlaceholder]="'Buscar turno...'"
+              [allowClear]="true"
+            />
           </div>
           <div class="field">
             <label>Estado</label>
@@ -70,24 +77,33 @@ type SaleRow = Sale & {
             <div class="form-grid four-cols">
               <div class="field">
                 <label>Carta / menu</label>
-                <select class="select" formControlName="menuItemId">
-                  <option [ngValue]="null">Sin menu</option>
-                  <option *ngFor="let item of menuItems()" [ngValue]="item.id">{{ item.menuName }}</option>
-                </select>
+                <app-search-select
+                  formControlName="menuItemId"
+                  [options]="menuItemOptions()"
+                  [placeholder]="'Sin menu'"
+                  [searchPlaceholder]="'Buscar item de menu...'"
+                  [allowClear]="true"
+                />
               </div>
               <div class="field">
                 <label>Producto directo</label>
-                <select class="select" formControlName="productId">
-                  <option [ngValue]="null">Sin producto</option>
-                  <option *ngFor="let item of products()" [ngValue]="item.id">{{ item.name }}</option>
-                </select>
+                <app-search-select
+                  formControlName="productId"
+                  [options]="productOptions()"
+                  [placeholder]="'Sin producto'"
+                  [searchPlaceholder]="'Buscar producto...'"
+                  [allowClear]="true"
+                />
               </div>
               <div class="field">
                 <label>Unidad</label>
-                <select class="select" formControlName="unitId">
-                  <option [ngValue]="null">Sin unidad</option>
-                  <option *ngFor="let item of units()" [ngValue]="item.id">{{ item.name }}</option>
-                </select>
+                <app-search-select
+                  formControlName="unitId"
+                  [options]="unitOptions()"
+                  [placeholder]="'Sin unidad'"
+                  [searchPlaceholder]="'Buscar unidad...'"
+                  [allowClear]="true"
+                />
               </div>
               <div class="field"><label>Cantidad</label><input type="number" class="input" formControlName="quantity"></div>
               <div class="field"><label>Precio unitario</label><input type="number" class="input" formControlName="unitPrice"></div>
@@ -109,6 +125,8 @@ type SaleRow = Sale & {
         [showActions]="canPostInventory()"
         [editLabel]="'Procesar'"
         [hideRemoveAction]="true"
+        [clientSearch]="true"
+        [searchPlaceholder]="'Numero, estado, ubicacion, cajero...'"
         [emptyTitle]="'Sin ventas en esta lista'"
         [emptyDescription]="''"
         (edit)="postInventory($event)"
@@ -121,6 +139,8 @@ type SaleRow = Sale & {
         [showActions]="canPostInventory()"
         [editLabel]="'Procesar'"
         [hideRemoveAction]="true"
+        [clientSearch]="true"
+        [searchPlaceholder]="'Numero, estado, ubicacion, cajero...'"
         [emptyTitle]="'Sin ventas pagadas'"
         [emptyDescription]="''"
         (edit)="postInventory($event)"
@@ -155,6 +175,43 @@ export class SalesPageComponent implements OnInit {
   protected readonly menuItems = signal<MenuItem[]>([]);
   protected readonly products = signal<Product[]>([]);
   protected readonly units = signal<Unit[]>([]);
+  protected readonly locationOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.locations().map((location) => ({
+      value: location.id,
+      label: location.locationName,
+      secondaryLabel: location.description ?? null
+    }))
+  );
+  protected readonly shiftOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.shiftsForSale().map((shift) => ({
+      value: shift.id,
+      label: this.shiftLabel(shift),
+      secondaryLabel: shift.notes ?? null,
+      keywords: [shift.username, shift.fullName, shift.locationName].filter(Boolean).join(' ')
+    }))
+  );
+  protected readonly menuItemOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.menuItems().map((item) => ({
+      value: item.id,
+      label: item.menuName,
+      secondaryLabel: `$${item.salePrice}`
+    }))
+  );
+  protected readonly productOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.products().map((product) => ({
+      value: product.id,
+      label: product.name,
+      secondaryLabel: product.sku ?? null,
+      keywords: [product.barcode, product.notes].filter(Boolean).join(' ')
+    }))
+  );
+  protected readonly unitOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.units().map((unit) => ({
+      value: unit.id,
+      label: unit.name,
+      secondaryLabel: unit.code
+    }))
+  );
   protected readonly statuses: SaleStatusOption[] = [
     { value: 'OPEN', label: 'Abierta' },
     { value: 'PAID', label: 'Pagada' },

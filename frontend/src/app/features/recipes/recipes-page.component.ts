@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { NgFor, NgIf } from '@angular/common';
 import { ReactiveFormsModule, FormArray, FormBuilder, Validators } from '@angular/forms';
 import { forkJoin } from 'rxjs';
@@ -7,11 +7,12 @@ import { Product, Recipe, RecipePayload, Unit } from '../../core/models/catalog.
 import { ProductApiService, RecipeApiService, UnitApiService } from '../../core/services/catalog-api.service';
 import { UiFeedbackService } from '../../core/services/ui-feedback.service';
 import { DataTableComponent } from '../../shared/ui/data-table.component';
+import { SearchSelectComponent, SearchSelectOption } from '../../shared/ui/search-select.component';
 
 @Component({
   selector: 'app-recipes-page',
   standalone: true,
-  imports: [ReactiveFormsModule, DataTableComponent, NgFor, NgIf],
+  imports: [ReactiveFormsModule, DataTableComponent, NgFor, NgIf, SearchSelectComponent],
   template: `
     <section class="page-stack">
       <header class="page-header"><div><span class="chip">Fase 2</span><h2 class="section-title">Recetas</h2><p class="section-subtitle">Define preparaciones, ingredientes y cantidades del menu.</p></div></header>
@@ -25,7 +26,14 @@ import { DataTableComponent } from '../../shared/ui/data-table.component';
         <div class="actions"><button class="btn btn-secondary" type="button" (click)="resetRecipe()">Limpiar</button><button class="btn btn-primary" type="submit">{{ editingRecipe() ? 'Actualizar receta' : 'Crear receta' }}</button></div>
       </form>
 
-      <app-data-table [rows]="recipes()" [columns]="recipeColumns" (edit)="selectRecipe($event)" (remove)="deleteRecipe($event)" />
+      <app-data-table
+        [rows]="recipes()"
+        [columns]="recipeColumns"
+        [clientSearch]="true"
+        [searchPlaceholder]="'Nombre de receta o descripcion...'"
+        (edit)="selectRecipe($event)"
+        (remove)="deleteRecipe($event)"
+      />
 
       <article class="shell-card form-card" *ngIf="selectedRecipe() as selected">
         <div class="page-header">
@@ -34,14 +42,37 @@ import { DataTableComponent } from '../../shared/ui/data-table.component';
 
         <form [formGroup]="itemForm" (ngSubmit)="addItem()">
           <div class="form-grid three-cols">
-            <div class="field"><label>Producto</label><select class="select" formControlName="productId"><option *ngFor="let item of products()" [ngValue]="item.id">{{ item.name }}</option></select></div>
-            <div class="field"><label>Unidad</label><select class="select" formControlName="unitId"><option *ngFor="let item of units()" [ngValue]="item.id">{{ item.name }}</option></select></div>
+            <div class="field">
+              <label>Producto</label>
+              <app-search-select
+                formControlName="productId"
+                [options]="productOptions()"
+                [placeholder]="'Selecciona un producto'"
+                [searchPlaceholder]="'Buscar producto...'"
+              />
+            </div>
+            <div class="field">
+              <label>Unidad</label>
+              <app-search-select
+                formControlName="unitId"
+                [options]="unitOptions()"
+                [placeholder]="'Selecciona una unidad'"
+                [searchPlaceholder]="'Buscar unidad...'"
+              />
+            </div>
             <div class="field"><label>Cantidad</label><input type="number" class="input" formControlName="quantity"></div>
           </div>
           <div class="actions"><button class="btn btn-primary" type="submit">Agregar ingrediente</button></div>
         </form>
 
-        <app-data-table [rows]="items()" [columns]="itemColumns" (edit)="noop($event)" (remove)="removeItem($event)" />
+        <app-data-table
+          [rows]="items()"
+          [columns]="itemColumns"
+          [clientSearch]="true"
+          [searchPlaceholder]="'Producto, cantidad o unidad...'"
+          (edit)="noop($event)"
+          (remove)="removeItem($event)"
+        />
       </article>
     </section>
   `,
@@ -60,6 +91,21 @@ export class RecipesPageComponent implements OnInit {
   protected readonly units = signal<Unit[]>([]);
   protected readonly selectedRecipe = signal<Recipe | null>(null);
   protected readonly editingRecipe = signal<Recipe | null>(null);
+  protected readonly productOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.products().map((product) => ({
+      value: product.id,
+      label: product.name,
+      secondaryLabel: product.sku ?? null,
+      keywords: [product.barcode, product.notes].filter(Boolean).join(' ')
+    }))
+  );
+  protected readonly unitOptions = computed<SearchSelectOption<number>[]>(() =>
+    this.units().map((unit) => ({
+      value: unit.id,
+      label: unit.name,
+      secondaryLabel: unit.code
+    }))
+  );
   protected readonly recipeColumns: DataColumn<Recipe>[] = [
     { key: 'recipeName', label: 'Receta' },
     { key: 'description', label: 'Descripción' },
