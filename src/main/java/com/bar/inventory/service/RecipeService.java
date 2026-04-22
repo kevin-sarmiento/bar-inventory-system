@@ -35,8 +35,10 @@ public class RecipeService {
         return recipeRepository.findById(id)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("Receta no encontrada")))
                 .flatMap(existing -> {
-                    recipe.setId(id);
-                    return recipeRepository.save(recipe);
+                    existing.setRecipeName(recipe.getRecipeName());
+                    existing.setDescription(recipe.getDescription());
+                    existing.setActive(recipe.getActive());
+                    return recipeRepository.save(existing);
                 });
     }
 

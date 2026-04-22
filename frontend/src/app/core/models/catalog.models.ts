@@ -101,6 +101,7 @@ export interface RecipeItem {
 }
 
 export interface RecipeItemPayload {
+  recipeId?: number | null;
   productId: number;
   unitId: number;
   quantity: number;

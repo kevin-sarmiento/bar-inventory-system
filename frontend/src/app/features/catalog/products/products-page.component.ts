@@ -65,21 +65,28 @@ type ProductRow = Product & { ubicacion: string };
       <div class="toolbar shell-card" *ngIf="displayRows().length">
         <div class="field field-grow">
           <label for="prod-search">Buscar producto</label>
-          <input
-            id="prod-search"
-            class="input"
-            type="search"
-            placeholder="Nombre, SKU, ubicacion..."
-            [value]="searchQuery()"
-            (input)="searchQuery.set($any($event.target).value)"
-          />
+          <div class="search-input-wrap">
+            <span class="search-input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.44 4.44 1.06-1.06-4.44-4.44A6.5 6.5 0 0 0 10.5 4Zm0 1.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/>
+              </svg>
+            </span>
+            <input
+              id="prod-search"
+              class="input search-input"
+              type="search"
+              placeholder="Nombre, SKU, ubicacion..."
+              [value]="searchQuery()"
+              (input)="searchQuery.set($any($event.target).value)"
+            />
+          </div>
         </div>
       </div>
       <app-data-table [rows]="filteredDisplayRows()" [columns]="columns" (edit)="edit($event)" (remove)="remove($event)" />
     </section>
   `,
   styles: [
-    `.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.field-span{grid-column:1/-1}.actions{display:flex;justify-content:flex-end;gap:.75rem}.toolbar{padding:1rem;display:flex;gap:1rem;align-items:flex-end}.field-grow{flex:1;min-width:12rem}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`
+    `.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.field-span{grid-column:1/-1}.actions{display:flex;justify-content:flex-end;gap:.75rem}.toolbar{padding:1rem;display:flex;gap:1rem;align-items:flex-end}.field-grow{flex:1;min-width:12rem}.search-input-wrap{position:relative}.search-input{padding-left:2.8rem}.search-input-icon{position:absolute;left:.95rem;top:50%;width:1rem;height:1rem;color:var(--color-muted);transform:translateY(-50%);pointer-events:none;display:inline-flex;align-items:center;justify-content:center}.search-input-icon svg{width:100%;height:100%;fill:currentColor}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })

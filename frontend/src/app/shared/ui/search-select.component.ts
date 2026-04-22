@@ -33,6 +33,11 @@ export interface SearchSelectOption<T> {
   template: `
     <div class="search-select" [class.is-disabled]="disabled()">
       <div class="search-select-input-wrap">
+        <span class="search-select-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.44 4.44 1.06-1.06-4.44-4.44A6.5 6.5 0 0 0 10.5 4Zm0 1.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/>
+          </svg>
+        </span>
         <input
           class="input search-select-input"
           type="search"
@@ -93,7 +98,28 @@ export interface SearchSelectOption<T> {
     }
 
     .search-select-input {
+      padding-left: 2.8rem;
       padding-right: 3rem;
+    }
+
+    .search-select-icon {
+      position: absolute;
+      left: 0.95rem;
+      top: 50%;
+      width: 1rem;
+      height: 1rem;
+      color: var(--color-muted);
+      transform: translateY(-50%);
+      pointer-events: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .search-select-icon svg {
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
     }
 
     .search-select-toggle {

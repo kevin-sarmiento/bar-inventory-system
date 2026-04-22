@@ -113,20 +113,25 @@ import { AuthService } from '../services/auth.service';
     }
 
     .brand-mark {
-      width: 52px;
-      height: 52px;
-      border-radius: 18px;
+      width: 64px;
+      height: 64px;
+      border-radius: 999px;
       display: grid;
       place-items: center;
       overflow: hidden;
-      background: transparent;
+      background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.6) 48%, rgba(255, 255, 255, 0) 72%);
+      box-shadow:
+        0 10px 24px rgba(41, 50, 65, 0.08),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+      flex-shrink: 0;
     }
 
     .brand-mark img {
       width: 100%;
       height: 100%;
-      object-fit: contain;
-      mix-blend-mode: multiply;
+      object-fit: cover;
+      transform: scale(1.08);
     }
 
     .brand-copy {
@@ -254,12 +259,14 @@ import { AuthService } from '../services/auth.service';
     }
 
     :host-context(:root[data-theme='dark']) .brand-mark {
-      background: rgba(255, 255, 255, 0.06);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+      background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 52%, rgba(255, 255, 255, 0) 76%);
+      box-shadow:
+        0 12px 26px rgba(0, 0, 0, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     }
 
     :host-context(:root[data-theme='dark']) .brand-mark img {
-      mix-blend-mode: screen;
       filter: brightness(1.2) saturate(1.14);
     }
 
