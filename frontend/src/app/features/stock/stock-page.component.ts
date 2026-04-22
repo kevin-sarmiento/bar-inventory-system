@@ -26,14 +26,21 @@ type StockRow = StockBalance & { productName: string; locationName: string };
       <div class="toolbar shell-card">
         <div class="field field-grow">
           <label for="stock-search">Buscar</label>
-          <input
-            id="stock-search"
-            class="input"
-            type="search"
-            placeholder="Producto, ubicacion, lote..."
-            [value]="searchQuery()"
-            (input)="searchQuery.set($any($event.target).value)"
-          />
+          <div class="search-input-wrap">
+            <span class="search-input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.44 4.44 1.06-1.06-4.44-4.44A6.5 6.5 0 0 0 10.5 4Zm0 1.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/>
+              </svg>
+            </span>
+            <input
+              id="stock-search"
+              class="input search-input"
+              type="search"
+              placeholder="Producto, ubicacion, lote..."
+              [value]="searchQuery()"
+              (input)="searchQuery.set($any($event.target).value)"
+            />
+          </div>
         </div>
       </div>
       <app-data-table
@@ -45,7 +52,7 @@ type StockRow = StockBalance & { productName: string; locationName: string };
     </section>
   `,
   styles: [
-    `.toolbar{padding:1rem;display:flex;gap:1rem;align-items:flex-end}.field-grow{flex:1;min-width:12rem}`
+    `.toolbar{padding:1rem;display:flex;gap:1rem;align-items:flex-end}.field-grow{flex:1;min-width:12rem}.search-input-wrap{position:relative}.search-input{padding-left:2.8rem}.search-input-icon{position:absolute;left:.95rem;top:50%;width:1rem;height:1rem;color:var(--color-muted);transform:translateY(-50%);pointer-events:none;display:inline-flex;align-items:center;justify-content:center}.search-input-icon svg{width:100%;height:100%;fill:currentColor}`
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })

@@ -72,14 +72,21 @@ type ShiftStatusFilter = 'ALL' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CA
       <div class="toolbar shell-card shifts-toolbar">
         <div class="field field-grow">
           <label for="shift-search">Buscar</label>
-          <input
-            id="shift-search"
-            class="input"
-            type="search"
-            placeholder="Usuario, sede, rol, estado, notas..."
-            [value]="shiftSearch()"
-            (input)="shiftSearch.set($any($event.target).value)"
-          />
+          <div class="search-input-wrap">
+            <span class="search-input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.44 4.44 1.06-1.06-4.44-4.44A6.5 6.5 0 0 0 10.5 4Zm0 1.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/>
+              </svg>
+            </span>
+            <input
+              id="shift-search"
+              class="input search-input"
+              type="search"
+              placeholder="Usuario, sede, rol, estado, notas..."
+              [value]="shiftSearch()"
+              (input)="shiftSearch.set($any($event.target).value)"
+            />
+          </div>
         </div>
         <div class="field">
           <label for="shift-status-filter">Estado</label>
@@ -138,7 +145,7 @@ type ShiftStatusFilter = 'ALL' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CA
     </section>
   `,
   styles: [
-    `.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.shifts-toolbar{padding:1rem;margin-top:0.25rem;margin-bottom:0.75rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end}.field-grow{flex:1;min-width:12rem}.actions{display:flex;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}.shift-check-actions{margin:0.75rem 0 1rem}.subsection-title{margin:1rem 0 0.5rem;font-family:'Sora',sans-serif;font-size:1.05rem}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`
+    `.form-card{padding:1.25rem;display:grid;gap:1rem}.three-cols{grid-template-columns:repeat(3,minmax(0,1fr))}.shifts-toolbar{padding:1rem;margin-top:0.25rem;margin-bottom:0.75rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end}.field-grow{flex:1;min-width:12rem}.search-input-wrap{position:relative}.search-input{padding-left:2.8rem}.search-input-icon{position:absolute;left:.95rem;top:50%;width:1rem;height:1rem;color:var(--color-muted);transform:translateY(-50%);pointer-events:none;display:inline-flex;align-items:center;justify-content:center}.search-input-icon svg{width:100%;height:100%;fill:currentColor}.actions{display:flex;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}.shift-check-actions{margin:0.75rem 0 1rem}.subsection-title{margin:1rem 0 0.5rem;font-family:'Sora',sans-serif;font-size:1.05rem}@media (max-width:900px){.three-cols{grid-template-columns:1fr}}`
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })

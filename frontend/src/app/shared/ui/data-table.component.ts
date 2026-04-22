@@ -13,14 +13,21 @@ let dataTableSearchSeq = 0;
       <div class="table-search" *ngIf="clientSearch() && rows().length">
         <div class="field field-grow">
           <label [attr.for]="searchFieldId">{{ searchLabel() }}</label>
-          <input
-            [id]="searchFieldId"
-            class="input"
-            type="search"
-            [placeholder]="searchPlaceholder()"
-            [value]="searchTerm()"
-            (input)="onSearchInput($event)"
-          />
+          <div class="search-input-wrap">
+            <span class="search-input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.44 4.44 1.06-1.06-4.44-4.44A6.5 6.5 0 0 0 10.5 4Zm0 1.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/>
+              </svg>
+            </span>
+            <input
+              [id]="searchFieldId"
+              class="input search-input"
+              type="search"
+              [placeholder]="searchPlaceholder()"
+              [value]="searchTerm()"
+              (input)="onSearchInput($event)"
+            />
+          </div>
         </div>
       </div>
 
@@ -93,6 +100,34 @@ let dataTableSearchSeq = 0;
 
     .field-grow {
       width: 100%;
+    }
+
+    .search-input-wrap {
+      position: relative;
+    }
+
+    .search-input {
+      padding-left: 2.8rem;
+    }
+
+    .search-input-icon {
+      position: absolute;
+      left: 0.95rem;
+      top: 50%;
+      width: 1rem;
+      height: 1rem;
+      color: var(--color-muted);
+      transform: translateY(-50%);
+      pointer-events: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .search-input-icon svg {
+      width: 100%;
+      height: 100%;
+      fill: currentColor;
     }
 
     :host-context(:root[data-theme='dark']) .table-search {

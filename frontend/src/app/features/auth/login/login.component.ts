@@ -137,19 +137,28 @@ import { UiFeedbackService } from '../../../core/services/ui-feedback.service';
     }
 
     .hero-image-frame {
-      width: min(100%, 420px);
+      width: min(100%, 430px);
       aspect-ratio: 1;
       display: grid;
       place-items: center;
-      padding: 0.5rem;
-      background: transparent;
+      padding: 0.2rem;
+      border-radius: 999px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.84) 68%, rgba(255, 255, 255, 0.2) 82%, rgba(255, 255, 255, 0) 100%);
+      box-shadow:
+        0 16px 34px rgba(41, 50, 65, 0.08),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.42);
     }
 
     img {
       width: 100%;
-      object-fit: contain;
-      mix-blend-mode: multiply;
-      filter: drop-shadow(0 12px 28px rgba(41, 50, 65, 0.12));
+      height: 100%;
+      object-fit: cover;
+      border-radius: 999px;
+      clip-path: circle(49.1% at 50% 50%);
+      transform: scale(1.015);
+      filter: drop-shadow(0 14px 26px rgba(41, 50, 65, 0.12));
     }
 
     h2 {
@@ -177,6 +186,10 @@ import { UiFeedbackService } from '../../../core/services/ui-feedback.service';
       .login-shell,
       .login-panel {
         grid-template-columns: 1fr;
+      }
+
+      .hero-image-frame {
+        width: min(100%, 360px);
       }
     }
   `],
