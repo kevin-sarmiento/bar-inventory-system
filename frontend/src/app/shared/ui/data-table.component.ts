@@ -42,7 +42,7 @@ let dataTableSearchSeq = 0;
 
           <tbody>
             <tr *ngFor="let row of displayRows()">
-              <td *ngFor="let column of columns()">
+              <td *ngFor="let column of columns()" [attr.data-label]="column.label">
                 <ng-container [ngSwitch]="column.type ?? 'text'">
                   <span *ngSwitchCase="'boolean'" class="badge" [class.badge-off]="!asBoolean(resolve(row, column.key))">
                     {{ asBoolean(resolve(row, column.key)) ? 'Activo' : 'Inactivo' }}
@@ -60,7 +60,7 @@ let dataTableSearchSeq = 0;
                 </ng-container>
               </td>
 
-              <td *ngIf="actionsVisible()" class="actions">
+              <td *ngIf="actionsVisible()" class="actions" data-label="Acciones">
                 <button *ngIf="!hideEditAction()" type="button" class="btn btn-secondary" (click)="edit.emit(row)">{{ editLabel() }}</button>
                 <button *ngIf="!hideRemoveAction()" type="button" class="btn btn-accent" (click)="remove.emit(row)">{{ removeLabel() }}</button>
               </td>
@@ -222,6 +222,86 @@ let dataTableSearchSeq = 0;
       flex: 0 0 auto;
       min-width: 7.75rem;
       padding-inline: 1.15rem;
+    }
+
+    @media (max-width: 768px) {
+      .table-shell {
+        padding: 0.5rem;
+      }
+
+      .table-search {
+        padding: 0.35rem 0.35rem 0.75rem;
+      }
+
+      .table-responsive {
+        overflow: visible;
+      }
+
+      table,
+      thead,
+      tbody,
+      tr,
+      th,
+      td {
+        display: block;
+        width: 100%;
+      }
+
+      table {
+        min-width: 0;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tbody {
+        display: grid;
+        gap: 0.9rem;
+      }
+
+      tr {
+        border: 1px solid rgba(41, 50, 65, 0.08);
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      td {
+        display: grid;
+        grid-template-columns: minmax(7.5rem, 42%) 1fr;
+        gap: 0.75rem;
+        align-items: center;
+        padding: 0.85rem 0.95rem;
+        max-width: none;
+      }
+
+      td::before {
+        content: attr(data-label);
+        color: var(--color-muted);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 700;
+      }
+
+      .actions {
+        grid-template-columns: 1fr;
+      }
+
+      .actions::before {
+        align-self: start;
+      }
+
+      .actions .btn {
+        width: 100%;
+        min-width: 0;
+      }
+
+      :host-context(:root[data-theme='dark']) tr {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush

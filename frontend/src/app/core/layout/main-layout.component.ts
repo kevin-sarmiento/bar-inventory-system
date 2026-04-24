@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, computed, inject, signal } from '@angular/core';
 import { DOCUMENT, NgFor, NgIf } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
@@ -11,7 +11,19 @@ import { AuthService } from '../services/auth.service';
   imports: [RouterOutlet, RouterLink, RouterLinkActive, NgFor, NgIf],
   template: `
     <div class="shell" [class.shell-collapsed]="sidebarCollapsed()">
-      <aside class="sidebar shell-card">
+      <button
+        *ngIf="isMobile() && mobileMenuOpen()"
+        class="mobile-overlay"
+        type="button"
+        aria-label="Cerrar menu"
+        (click)="closeMobileMenu()"
+      ></button>
+
+      <aside
+        class="sidebar shell-card"
+        [class.sidebar-mobile-open]="mobileMenuOpen()"
+        [attr.aria-hidden]="isMobile() && !mobileMenuOpen()"
+      >
         <div class="brand">
           <div class="brand-mark">
             <img src="assets/brand/sake-neon.png" alt="SAKE">
@@ -23,7 +35,13 @@ import { AuthService } from '../services/auth.service';
         </div>
 
         <nav class="menu">
-          <a *ngFor="let item of visibleMenu()" [routerLink]="item.path" routerLinkActive="active" class="menu-item">
+          <a
+            *ngFor="let item of visibleMenu()"
+            [routerLink]="item.path"
+            routerLinkActive="active"
+            class="menu-item"
+            (click)="handleMenuNavigation()"
+          >
             <span class="menu-icon">{{ item.icon }}</span>
             <span *ngIf="!sidebarCollapsed()">{{ item.label }}</span>
           </a>
@@ -55,6 +73,16 @@ import { AuthService } from '../services/auth.service';
 
       <div class="content">
         <header class="topbar shell-card">
+          <button
+            *ngIf="isMobile()"
+            class="btn btn-secondary mobile-menu-button"
+            type="button"
+            (click)="toggleMobileMenu()"
+            [attr.aria-label]="mobileMenuOpen() ? 'Cerrar menu' : 'Abrir menu'"
+          >
+            {{ mobileMenuOpen() ? '✕' : '☰' }}
+          </button>
+
           <div>
             <p class="eyebrow">SAKE</p>
             <h1>{{ currentTitle() }}</h1>
@@ -97,6 +125,7 @@ import { AuthService } from '../services/auth.service';
       top: 1rem;
       height: calc(100vh - 2rem);
       overflow: auto;
+      z-index: 20;
     }
 
     .brand,
@@ -236,6 +265,20 @@ import { AuthService } from '../services/auth.service';
       flex-wrap: wrap;
     }
 
+    .mobile-menu-button {
+      display: none;
+      min-width: 3rem;
+      min-height: 3rem;
+      padding: 0.75rem;
+      font-size: 1.2rem;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+
+    .mobile-overlay {
+      display: none;
+    }
+
     .eyebrow {
       margin: 0 0 0.3rem;
       text-transform: uppercase;
@@ -279,11 +322,94 @@ import { AuthService } from '../services/auth.service';
       .shell,
       .shell-collapsed {
         grid-template-columns: 1fr;
+        padding: 0.75rem;
+        gap: 0.75rem;
       }
 
       .sidebar {
-        position: static;
-        height: auto;
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: min(86vw, 320px);
+        height: 100vh;
+        border-radius: 0 24px 24px 0;
+        transform: translateX(-104%);
+        transition: transform 220ms ease, box-shadow 220ms ease;
+        top: 0;
+      }
+
+      .sidebar.sidebar-mobile-open {
+        transform: translateX(0);
+        box-shadow: 0 28px 56px rgba(0, 0, 0, 0.28);
+      }
+
+      .mobile-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 15;
+        border: 0;
+        background: rgba(7, 12, 18, 0.42);
+        backdrop-filter: blur(4px);
+      }
+
+      .mobile-menu-button {
+        display: inline-flex;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        padding: 1rem 1.05rem;
+      }
+
+      .topbar-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .user-pill {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .user-pill strong,
+      .user-pill span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .view {
+        padding-bottom: 5rem;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .shell,
+      .shell-collapsed {
+        padding: 0.5rem;
+      }
+
+      .topbar-actions {
+        gap: 0.65rem;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .topbar-actions .btn {
+        width: 100%;
+      }
+
+      .brand-mark {
+        width: 52px;
+        height: 52px;
+      }
+
+      .menu-item {
+        padding: 0.85rem 0.9rem;
+      }
+
+      .sidebar {
+        width: min(90vw, 320px);
       }
     }
   `],
@@ -294,6 +420,8 @@ export class MainLayoutComponent {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   protected readonly sidebarCollapsed = signal(false);
+  protected readonly mobileMenuOpen = signal(false);
+  protected readonly isMobile = signal(typeof window !== 'undefined' ? window.innerWidth <= 1024 : false);
   protected readonly currentTitle = signal('Panel');
   protected readonly darkMode = signal(this.readTheme());
 
@@ -324,11 +452,30 @@ export class MainLayoutComponent {
     this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe(() => {
       const current = this.visibleMenu().find((item) => this.router.url.startsWith(item.path));
       this.currentTitle.set(current?.label ?? 'Panel');
+      this.closeMobileMenu();
     });
   }
 
   protected toggleSidebar(): void {
+    if (this.isMobile()) {
+      this.toggleMobileMenu();
+      return;
+    }
     this.sidebarCollapsed.update((value) => !value);
+  }
+
+  protected toggleMobileMenu(): void {
+    this.mobileMenuOpen.update((value) => !value);
+  }
+
+  protected closeMobileMenu(): void {
+    this.mobileMenuOpen.set(false);
+  }
+
+  protected handleMenuNavigation(): void {
+    if (this.isMobile()) {
+      this.closeMobileMenu();
+    }
   }
 
   protected themeIcon(): string {
@@ -359,6 +506,15 @@ export class MainLayoutComponent {
       this.document.documentElement.setAttribute('data-theme', 'dark');
     } else {
       this.document.documentElement.removeAttribute('data-theme');
+    }
+  }
+
+  @HostListener('window:resize')
+  protected onResize(): void {
+    const mobile = window.innerWidth <= 1024;
+    this.isMobile.set(mobile);
+    if (!mobile) {
+      this.mobileMenuOpen.set(false);
     }
   }
 }

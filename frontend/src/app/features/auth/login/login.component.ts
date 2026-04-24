@@ -188,8 +188,46 @@ import { UiFeedbackService } from '../../../core/services/ui-feedback.service';
         grid-template-columns: 1fr;
       }
 
+      .login-shell {
+        min-height: auto;
+      }
+
+      .form-panel {
+        min-height: auto;
+      }
+
       .hero-image-frame {
         width: min(100%, 360px);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .login-shell {
+        gap: 0.75rem;
+        padding: 0.75rem;
+      }
+
+      .login-panel,
+      .form-panel {
+        padding: 1.25rem;
+      }
+
+      .brand-title {
+        margin: 0.5rem 0 0.85rem;
+        font-size: clamp(2.3rem, 15vw, 3.8rem);
+      }
+
+      .hero-copy .hero-lead {
+        max-width: none;
+        font-size: 0.96rem;
+      }
+
+      .hero-image-frame {
+        width: min(100%, 280px);
+      }
+
+      h2 {
+        font-size: 1.6rem;
       }
     }
   `],
