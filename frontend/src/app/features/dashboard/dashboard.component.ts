@@ -192,10 +192,18 @@ import { ReportApiService } from '../../core/services/report-api.service';
       border-color: rgba(255, 255, 255, 0.08);
     }
 
+    :host-context(:root[data-theme='dark']) .hero-art-frame {
+      background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 62%, rgba(255, 255, 255, 0.02) 82%, rgba(255, 255, 255, 0) 100%);
+      box-shadow:
+        0 18px 34px rgba(0, 0, 0, 0.24),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    }
+
     :host-context(:root[data-theme='dark']) .hero-art img {
-      mix-blend-mode: screen;
-      opacity: 0.98;
-      filter: brightness(1.18) saturate(1.12) drop-shadow(0 18px 36px rgba(62, 180, 137, 0.14));
+      mix-blend-mode: normal;
+      opacity: 1;
+      filter: saturate(1.04) contrast(1.02) drop-shadow(0 16px 28px rgba(0, 0, 0, 0.22));
     }
 
     :host-context(:root[data-theme='dark']) .daily-summary {
