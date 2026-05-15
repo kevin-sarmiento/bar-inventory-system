@@ -22,3 +22,14 @@ server:
 jwt:
   secret: ${JWT_SECRET:change-me-please-very-long-secret}
   expiration-minutes: 120
+
+ai:
+  ollama:
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    model: ${OLLAMA_MODEL:llama3.2:3b}
+    timeout-seconds: ${OLLAMA_TIMEOUT_SECONDS:120}
+  web-search:
+    enabled: ${AI_WEB_SEARCH_ENABLED:false}
+    base-url: ${AI_WEB_SEARCH_BASE_URL:}
+    max-results: ${AI_WEB_SEARCH_MAX_RESULTS:5}
+    timeout-seconds: ${AI_WEB_SEARCH_TIMEOUT_SECONDS:15}

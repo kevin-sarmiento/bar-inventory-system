@@ -23,6 +23,9 @@
 hs_err_pid*
 replay_pid*
 
+# Build output
+target/
+
 # IDE
 .idea/
 

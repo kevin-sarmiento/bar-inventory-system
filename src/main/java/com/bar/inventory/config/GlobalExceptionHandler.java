@@ -68,8 +68,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public Mono<ResponseEntity<Map<String, String>>> handleGeneric(Exception ex) {
+        String details = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
         return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Error interno", "details", ex.getMessage())));
+                .body(Map.of("error", "Error interno", "details", details)));
     }
 
     private Map<String, String> toFieldMap(FieldError error) {

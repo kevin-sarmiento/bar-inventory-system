@@ -17,6 +17,7 @@ export const API_CONFIG = {
     stockBalances: '/api/stock-balances',
     sales: '/api/sales',
     physicalCounts: '/api/physical-counts',
-    reports: '/api/reports'
+    reports: '/api/reports',
+    ai: '/api/ai'
   }
 } as const;

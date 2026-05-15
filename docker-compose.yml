@@ -20,10 +20,54 @@ services:
       DB_USERNAME: bar_user
       DB_PASSWORD: bar_pass
       JWT_SECRET: super-secret-change-me-please-12345678901234567890
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: llama3.2:3b
+      OLLAMA_TIMEOUT_SECONDS: 180
+      AI_WEB_SEARCH_ENABLED: "true"
+      AI_WEB_SEARCH_BASE_URL: http://searxng:8080
+      AI_WEB_SEARCH_TIMEOUT_SECONDS: 30
     ports:
       - "8082:8080"
     depends_on:
       - db
+      - ollama
+      - searxng
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: bar_inventory_searxng
+    environment:
+      SEARXNG_BASE_URL: http://localhost:8888/
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./docker/searxng:/etc/searxng:rw
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bar_inventory_ollama
+    environment:
+      OLLAMA_MODEL: llama3.2:3b
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        ollama serve &
+        i=0
+        while [ "$$i" -lt 45 ]; do
+          if ollama list >/dev/null 2>&1; then
+            break
+          fi
+          i=$$((i + 1))
+          sleep 1
+        done
+        ollama pull "$${OLLAMA_MODEL:-llama3.2:3b}" || true
+        wait
 
 volumes:
   db_data:
+  ollama_data:

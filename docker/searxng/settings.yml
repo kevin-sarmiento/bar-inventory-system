@@ -1,0 +1,20 @@
+# Configuracion para uso interno (API del backend en Docker). No exponer a Internet sin limiter.
+use_default_settings: true
+
+general:
+  instance_name: "Bar Inventory SearxNG"
+  debug: false
+
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  secret_key: "bar-inventory-searxng-dev-secret-replace-in-production"
+  limiter: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  formats:
+    - html
+    - json

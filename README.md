@@ -21,6 +21,10 @@ Queda disponible en:
 - API: `http://localhost:8082`
 - Swagger UI: `http://localhost:8082/swagger-ui.html`
 - OpenAPI JSON: `http://localhost:8082/v3/api-docs`
+- Ollama: `http://localhost:11434`
+- SearxNG (busqueda web opcional para el chat): `http://localhost:8888` — en **Inteligencia**, activa la casilla *Buscar en la web* antes de enviar.
+
+El primer arranque descarga el modelo local `llama3.2:3b`, por eso puede tardar varios minutos. Despues de iniciar sesion, el chat de IA queda en la pantalla **Inteligencia**.
 
 Login por defecto:
 - usuario: `admin`
@@ -36,6 +40,15 @@ Luego:
 ```powershell
 mvn spring-boot:run
 ```
+
+Para usar el chat de IA en modo local necesitas Ollama activo y el modelo descargado:
+
+```powershell
+ollama pull llama3.2:3b
+ollama serve
+```
+
+Para búsqueda web con SearxNG (opcional): levanta una instancia y define `AI_WEB_SEARCH_ENABLED=true` y `AI_WEB_SEARCH_BASE_URL` (por ejemplo `http://localhost:8888`). Sin eso, el chat solo usa datos del inventario.
 
 ## Autenticación
 La API usa JWT. Primero debes hacer login y luego enviar el token en el header:

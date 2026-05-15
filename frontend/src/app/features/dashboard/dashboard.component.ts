@@ -1,12 +1,15 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { DecimalPipe, NgIf } from '@angular/common';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { DecimalPipe, NgFor, NgIf } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { AiInsightsResponseDto } from '../../core/models/ai-insights.models';
 import { DashboardSummaryDto } from '../../core/models/report.models';
+import { AiInsightsApiService } from '../../core/services/ai-insights-api.service';
 import { ReportApiService } from '../../core/services/report-api.service';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [NgIf, DecimalPipe],
+  imports: [NgIf, NgFor, DecimalPipe, RouterLink],
   template: `
     <section class="page-stack">
       <div class="hero shell-card">
@@ -51,6 +54,40 @@ import { ReportApiService } from '../../core/services/report-api.service';
             <span class="daily-summary__label">Valor inventario</span>
             <strong>{{ s.inventoryValue | number: '1.0-0' }}</strong>
             <span class="daily-summary__hint">Estimacion en sede</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="insight shell-card ai-summary" *ngIf="insights() as ai">
+        <header class="ai-summary__head">
+          <div>
+            <span class="chip">IA local</span>
+            <h3>Inteligencia Operativa</h3>
+            <p>{{ ai.executiveSummary }}</p>
+          </div>
+          <a class="btn btn-secondary" routerLink="/intelligence">Ver analisis completo</a>
+        </header>
+
+        <div class="ai-summary__grid">
+          <div class="ai-summary__metric">
+            <span>Alertas</span>
+            <strong>{{ ai.metrics.totalAlerts }}</strong>
+            <small>{{ ai.metrics.criticalAlerts }} criticas · {{ ai.metrics.highAlerts }} altas</small>
+          </div>
+          <div class="ai-summary__metric">
+            <span>Reposiciones</span>
+            <strong>{{ ai.metrics.replenishmentSuggestions }}</strong>
+            <small>Costo estimado {{ ai.metrics.estimatedReplenishmentCost | number: '1.0-0' }}</small>
+          </div>
+          <div class="ai-summary__actions">
+            <strong>Prioridades</strong>
+            <p *ngIf="!topOperationalAlerts().length">No hay alertas relevantes por ahora.</p>
+            <ul *ngIf="topOperationalAlerts().length">
+              <li *ngFor="let alert of topOperationalAlerts()">
+                <span>{{ alert.severity }}</span>
+                {{ alert.title }}
+              </li>
+            </ul>
           </div>
         </div>
       </article>
@@ -101,14 +138,44 @@ import { ReportApiService } from '../../core/services/report-api.service';
       padding: 1.35rem 1.5rem;
     }
 
+    .ai-summary {
+      padding: 1.35rem 1.5rem;
+      display: grid;
+      gap: 1rem;
+    }
+
     .daily-summary__head {
       margin-bottom: 1.1rem;
+    }
+
+    .ai-summary__head {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: flex-start;
     }
 
     .daily-summary__head h3 {
       margin: 0 0 0.25rem;
       font-family: 'Sora', sans-serif;
       font-size: 1.2rem;
+    }
+
+    .ai-summary__head h3,
+    .ai-summary__head p,
+    .ai-summary__actions p {
+      margin: 0;
+    }
+
+    .ai-summary__head h3 {
+      font-family: 'Sora', sans-serif;
+      font-size: 1.2rem;
+      margin-top: 0.35rem;
+    }
+
+    .ai-summary__head p {
+      color: var(--color-muted);
+      max-width: 62rem;
     }
 
     .daily-summary__meta {
@@ -123,7 +190,23 @@ import { ReportApiService } from '../../core/services/report-api.service';
       gap: 0.85rem;
     }
 
+    .ai-summary__grid {
+      display: grid;
+      grid-template-columns: 0.7fr 0.7fr 1.6fr;
+      gap: 0.85rem;
+    }
+
     .daily-summary__tile {
+      border-radius: 18px;
+      padding: 1rem 1.05rem;
+      display: grid;
+      gap: 0.35rem;
+      border: 1px solid rgba(41, 50, 65, 0.08);
+      background: rgba(255, 255, 255, 0.55);
+    }
+
+    .ai-summary__metric,
+    .ai-summary__actions {
       border-radius: 18px;
       padding: 1rem 1.05rem;
       display: grid;
@@ -140,7 +223,21 @@ import { ReportApiService } from '../../core/services/report-api.service';
       color: var(--color-muted);
     }
 
+    .ai-summary__metric span {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 700;
+      color: var(--color-muted);
+    }
+
     .daily-summary__tile strong {
+      font-family: 'Sora', sans-serif;
+      font-size: 1.45rem;
+      line-height: 1.2;
+    }
+
+    .ai-summary__metric strong {
       font-family: 'Sora', sans-serif;
       font-size: 1.45rem;
       line-height: 1.2;
@@ -149,6 +246,29 @@ import { ReportApiService } from '../../core/services/report-api.service';
     .daily-summary__hint {
       font-size: 0.8rem;
       color: var(--color-muted);
+    }
+
+    .ai-summary__metric small,
+    .ai-summary__actions p {
+      font-size: 0.8rem;
+      color: var(--color-muted);
+    }
+
+    .ai-summary__actions ul {
+      margin: 0;
+      padding-left: 1.1rem;
+      display: grid;
+      gap: 0.25rem;
+    }
+
+    .ai-summary__actions li {
+      color: var(--color-muted);
+    }
+
+    .ai-summary__actions li span {
+      font-weight: 800;
+      color: var(--color-text);
+      margin-right: 0.35rem;
     }
 
     .daily-summary__tile--sales {
@@ -217,6 +337,12 @@ import { ReportApiService } from '../../core/services/report-api.service';
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     }
 
+    :host-context(:root[data-theme='dark']) .ai-summary__metric,
+    :host-context(:root[data-theme='dark']) .ai-summary__actions {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
     :host-context(:root[data-theme='dark']) .daily-summary__label,
     :host-context(:root[data-theme='dark']) .daily-summary__hint {
       color: rgba(235, 243, 255, 0.82);
@@ -267,8 +393,14 @@ import { ReportApiService } from '../../core/services/report-api.service';
 
     @media (max-width: 1024px) {
       .hero,
-      .daily-summary__grid {
+      .daily-summary__grid,
+      .ai-summary__grid,
+      .ai-summary__head {
         grid-template-columns: 1fr;
+      }
+
+      .ai-summary__head {
+        display: grid;
       }
     }
   `],
@@ -276,10 +408,14 @@ import { ReportApiService } from '../../core/services/report-api.service';
 })
 export class DashboardComponent implements OnInit {
   private readonly reportsApi = inject(ReportApiService);
+  private readonly aiApi = inject(AiInsightsApiService);
   protected readonly summary = signal<DashboardSummaryDto | null>(null);
+  protected readonly insights = signal<AiInsightsResponseDto | null>(null);
+  protected readonly topOperationalAlerts = computed(() => this.insights()?.alerts.slice(0, 3) ?? []);
 
   ngOnInit(): void {
     this.reportsApi.getDailyDashboard().subscribe((summary) => this.summary.set(summary));
+    this.aiApi.getInsights().subscribe((insights) => this.insights.set(insights));
   }
 
 }

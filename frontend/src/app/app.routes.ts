@@ -21,6 +21,12 @@ export const appRoutes: Routes = [
         loadComponent: () => import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent)
       },
       {
+        path: 'intelligence',
+        loadComponent: () => import('./features/intelligence/intelligence-page.component').then((m) => m.IntelligencePageComponent),
+        canActivate: [roleGuard],
+        data: { roles: ['ADMINISTRADOR', 'GERENTE', 'INVENTARIO'] }
+      },
+      {
         path: 'catalog/categories',
         loadComponent: () => import('./features/catalog/categories/categories-page.component').then((m) => m.CategoriesPageComponent),
         canActivate: [roleGuard],
