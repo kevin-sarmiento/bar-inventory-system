@@ -427,7 +427,7 @@ export class MainLayoutComponent {
 
   private readonly menu: RouteMenuItem[] = [
     { label: 'Panel', icon: '🏝️', path: '/dashboard' },
-    { label: 'Inteligencia', icon: 'IA', path: '/intelligence', roles: ['ADMINISTRADOR', 'GERENTE', 'INVENTARIO'] },
+    { label: 'Inteligencia', icon: '✨', path: '/intelligence', roles: ['ADMINISTRADOR', 'GERENTE', 'INVENTARIO'] },
     { label: 'Categorias', icon: '🏷️', path: '/catalog/categories', roles: ['ADMINISTRADOR', 'INVENTARIO'] },
     { label: 'Unidades', icon: '📏', path: '/catalog/units', roles: ['ADMINISTRADOR', 'INVENTARIO'] },
     { label: 'Proveedores', icon: '🚚', path: '/catalog/suppliers', roles: ['ADMINISTRADOR', 'INVENTARIO'] },
