@@ -17,6 +17,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class AiChatService {
@@ -58,7 +59,7 @@ public class AiChatService {
                 })
                 .onErrorMap(ex -> !(ex instanceof ResponseStatusException), ex -> new ResponseStatusException(
                         HttpStatus.SERVICE_UNAVAILABLE,
-                        "No se pudo conectar con Ollama. Verifica que el servicio local este activo.",
+                        ollamaUnavailableMessage(ex),
                         ex
                 ));
     }
@@ -102,18 +103,30 @@ public class AiChatService {
                                boolean askedWeb) {
         String webSection;
         if (webSnippets != null && !webSnippets.isBlank()) {
-            webSection = "\nContexto web (extractos):\n" + webSnippets + "\n";
+            webSection = """
+                    
+                    === Busqueda web (SearxNG) ===
+                    El backend ya consulto Internet y trajo estos extractos. DEBES usarlos para responder la parte externa.
+                    PROHIBIDO decir que no puedes buscar en Internet, que no tienes acceso en tiempo real o que solo usas tu entrenamiento.
+                    Cita la URL cuando uses un dato de esta seccion.
+                    
+                    """ + webSnippets + "\n";
         } else if (askedWeb) {
-            webSection = "\nEl usuario activo busqueda web (SearxNG), pero no llegaron extractos en esta peticion. "
-                    + "No digas que tu capacidad impide buscar en internet: indica que la busqueda no devolvio datos "
-                    + "ahora y responde con el contexto operativo del sistema.\n";
+            webSection = """
+                    
+                    === Busqueda web solicitada ===
+                    El usuario activo busqueda web, pero SearxNG no devolvio extractos en esta peticion (timeout o sin resultados).
+                    PROHIBIDO decir que no puedes buscar en Internet o que no tienes acceso externo.
+                    Indica brevemente que la busqueda no devolvio datos utiles ahora y responde con el contexto operativo del inventario.
+                    
+                    """;
         } else {
             webSection = "";
         }
         return """
                 Eres el Asistente Inteligente del Bar SAKE.
                 Responde siempre en español, de forma clara y accionable.
-                Prioriza el contexto operativo del sistema. Si hay contexto web, usalo solo como apoyo y cita la URL cuando cites un dato externo.
+                Prioriza el contexto operativo del sistema. Si hay extractos web, son tu fuente para datos externos.
                 No inventes cifras ni hechos que no aparezcan en los contextos. No digas que modificaste el sistema.
                 
                 Contexto del sistema:
@@ -149,6 +162,24 @@ public class AiChatService {
         appendAlerts(context, insights.getAlerts());
         appendReplenishment(context, insights.getReplenishmentSuggestions());
         return context.toString();
+    }
+
+    private String ollamaUnavailableMessage(Throwable ex) {
+        if (isTimeout(ex)) {
+            return "Ollama tardó demasiado en responder (timeout de " + timeout.toSeconds()
+                    + " s). En CPU la primera respuesta puede tardar varios minutos; espera y vuelve a intentar.";
+        }
+        return "No se pudo conectar con Ollama. Verifica que el servicio local este activo "
+                + "(ollama serve o contenedor ollama en ejecución).";
+    }
+
+    private boolean isTimeout(Throwable ex) {
+        for (Throwable current = ex; current != null; current = current.getCause()) {
+            if (current instanceof TimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String ollamaErrorHint(WebClientResponseException ex) {

@@ -1,25 +1,18 @@
-import {
-  AfterViewChecked,
-  ChangeDetectionStrategy,
-  Component,
-  ElementRef,
-  OnInit,
-  inject,
-  signal,
-  viewChild
-} from '@angular/core';
+﻿import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, NgFor, NgIf } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
-import { AiChatMessage, AiInsightsResponseDto, AiReplenishmentSuggestionDto } from '../../core/models/ai-insights.models';
+import { AiChatContext } from '../../core/models/ai-chat-context.model';
+import { AiInsightsResponseDto, AiReplenishmentSuggestionDto } from '../../core/models/ai-insights.models';
 import { Location } from '../../core/models/catalog.models';
 import { AiInsightsApiService } from '../../core/services/ai-insights-api.service';
 import { LocationApiService } from '../../core/services/catalog-api.service';
+import { AiChatPanelComponent } from '../../shared/ui/ai-chat-panel.component';
 
 @Component({
   selector: 'app-intelligence-page',
   standalone: true,
-  imports: [ReactiveFormsModule, NgIf, NgFor, DecimalPipe, DatePipe],
+  imports: [ReactiveFormsModule, NgIf, NgFor, DecimalPipe, DatePipe, AiChatPanelComponent],
   template: `
     <section class="command-center page-stack">
       <header class="hero-panel shell-card">
@@ -81,7 +74,7 @@ import { LocationApiService } from '../../core/services/catalog-api.service';
           <span *ngIf="!insightsLoading()">Actualizar análisis</span>
           <span *ngIf="insightsLoading()" class="filters-bar__btn-loading">
             <span class="spinner" aria-hidden="true"></span>
-            Actualizando…
+            Actualizandoâ€¦
           </span>
         </button>
       </form>
@@ -157,7 +150,7 @@ import { LocationApiService } from '../../core/services/catalog-api.service';
                 </header>
 
                 <div class="empty-panel" *ngIf="!data.alerts.length">
-                  <div class="empty-panel__icon" aria-hidden="true">✓</div>
+                  <div class="empty-panel__icon" aria-hidden="true">âœ“</div>
                   <p>No hay alertas relevantes para el periodo seleccionado.</p>
                 </div>
 
@@ -187,7 +180,7 @@ import { LocationApiService } from '../../core/services/catalog-api.service';
                 </header>
 
                 <div class="empty-panel" *ngIf="!data.replenishmentSuggestions.length">
-                  <div class="empty-panel__icon" aria-hidden="true">◎</div>
+                  <div class="empty-panel__icon" aria-hidden="true">â—Ž</div>
                   <p>No hay compras urgentes sugeridas con los datos actuales.</p>
                 </div>
 
@@ -211,83 +204,7 @@ import { LocationApiService } from '../../core/services/catalog-api.service';
             </section>
           </div>
 
-          <aside class="chat-panel shell-card">
-            <header class="chat-panel__head">
-              <div class="chat-panel__title-wrap">
-                <span class="chip chip--glow">Copiloto Ollama</span>
-                <h3>Pregunta sobre tu inventario</h3>
-                <p>Contexto del periodo activo. Activa búsqueda web para complementar con SearxNG.</p>
-              </div>
-            </header>
-
-            <div class="chat-panel__messages" #chatScroll>
-              <div class="chat-empty" *ngIf="!chatMessages().length && !chatLoading()">
-                <div class="chat-empty__icon" aria-hidden="true">
-                  <svg viewBox="0 0 48 48"><path fill="currentColor" opacity="0.9" d="M24 4a16 16 0 100 32 32 0 01-16-16zm0 6l-8 8h5v10h6V18h5l-8-8z"/></svg>
-                </div>
-                <p>Empieza con una pregunta o elige una sugerencia:</p>
-                <div class="chat-suggestions">
-                  <button
-                    type="button"
-                    class="chat-suggestion"
-                    *ngFor="let suggestion of chatSuggestions"
-                    (click)="applySuggestion(suggestion)">
-                    {{ suggestion }}
-                  </button>
-                </div>
-              </div>
-
-              <div
-                class="chat-row"
-                *ngFor="let message of chatMessages()"
-                [class.chat-row--user]="message.role === 'user'">
-                <div
-                  class="chat-avatar"
-                  [class.chat-avatar--user]="message.role === 'user'"
-                  [class.chat-avatar--ai]="message.role === 'assistant'"
-                  aria-hidden="true">
-                  {{ message.role === 'user' ? 'Tú' : 'AI' }}
-                </div>
-                <div class="chat-bubble">
-                  <p>{{ message.content }}</p>
-                  <footer class="chat-bubble__meta" *ngIf="message.role === 'assistant'">
-                    <span *ngIf="message.model">{{ message.model }}</span>
-                    <span *ngIf="message.generatedAt">{{ message.generatedAt | date: 'short' }}</span>
-                    <span class="chat-bubble__web" *ngIf="message.webSearchUsed">Incluye búsqueda web</span>
-                  </footer>
-                </div>
-              </div>
-
-              <div class="chat-row chat-row--typing" *ngIf="chatLoading()">
-                <div class="chat-avatar chat-avatar--ai" aria-hidden="true">AI</div>
-                <div class="chat-bubble chat-bubble--typing">
-                  <div class="typing-dots" aria-hidden="true">
-                    <span></span><span></span><span></span>
-                  </div>
-                  <span>Analizando con Ollama…</span>
-                </div>
-              </div>
-            </div>
-
-            <form class="chat-composer" [formGroup]="chatForm" (ngSubmit)="sendMessage()">
-              <textarea
-                class="input chat-composer__input"
-                rows="2"
-                formControlName="message"
-                placeholder="Escribe tu pregunta…"
-                [disabled]="chatLoading()"></textarea>
-              <div class="chat-composer__footer">
-                <label class="switch">
-                  <input type="checkbox" formControlName="useWebSearch" [disabled]="chatLoading()" />
-                  <span class="switch__track" aria-hidden="true"><span class="switch__thumb"></span></span>
-                  <span class="switch__label">Buscar en la web (SearxNG)</span>
-                </label>
-                <button class="btn btn-primary chat-composer__send" type="submit" [disabled]="chatLoading()">
-                  {{ chatLoading() ? 'Enviando…' : 'Enviar' }}
-                </button>
-              </div>
-            </form>
-          </aside>
+          <app-ai-chat-panel variant="embedded" [context]="chatContext()" />
         </div>
       </ng-container>
     </section>
@@ -627,287 +544,6 @@ import { LocationApiService } from '../../core/services/catalog-api.service';
       color: var(--color-mint);
     }
 
-    /* Chat panel */
-    .chat-panel {
-      position: sticky;
-      top: 5.5rem;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      min-height: min(78vh, 720px);
-      max-height: calc(100vh - 6rem);
-      padding: 0;
-      overflow: hidden;
-      background:
-        linear-gradient(180deg, rgba(62, 180, 137, 0.06), transparent 22%),
-        var(--color-surface);
-      box-shadow:
-        0 0 0 1px rgba(62, 180, 137, 0.12),
-        var(--shadow-card);
-    }
-
-    .chat-panel__head {
-      padding: 1.1rem 1.15rem 0.85rem;
-      border-bottom: 1px solid rgba(41, 50, 65, 0.08);
-    }
-
-    .chat-panel__head h3 {
-      margin: 0.35rem 0 0;
-      font-family: 'Sora', sans-serif;
-      font-size: 1.15rem;
-    }
-
-    .chat-panel__head p {
-      margin: 0;
-      color: var(--color-muted);
-      font-size: 0.86rem;
-    }
-
-    .chat-panel__messages {
-      padding: 0.85rem 1rem;
-      overflow-y: auto;
-      scroll-behavior: smooth;
-      display: grid;
-      align-content: start;
-      gap: 0.85rem;
-      min-height: 200px;
-    }
-
-    .chat-empty {
-      text-align: center;
-      padding: 1.5rem 0.75rem;
-      display: grid;
-      gap: 0.85rem;
-      justify-items: center;
-    }
-
-    .chat-empty__icon {
-      width: 3.5rem;
-      height: 3.5rem;
-      color: var(--color-mint);
-      opacity: 0.85;
-    }
-
-    .chat-empty p {
-      margin: 0;
-      color: var(--color-muted);
-      max-width: 18rem;
-    }
-
-    .chat-suggestions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.45rem;
-      justify-content: center;
-    }
-
-    .chat-suggestion {
-      border: 1px solid rgba(62, 180, 137, 0.28);
-      background: rgba(62, 180, 137, 0.08);
-      color: var(--color-ocean);
-      border-radius: 999px;
-      padding: 0.45rem 0.85rem;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 180ms ease, transform 180ms ease, border-color 180ms ease;
-    }
-
-    .chat-suggestion:hover {
-      background: rgba(62, 180, 137, 0.16);
-      transform: translateY(-1px);
-    }
-
-    .chat-suggestion:focus-visible {
-      outline: 2px solid var(--color-mint);
-      outline-offset: 2px;
-    }
-
-    .chat-row {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.55rem;
-      align-items: flex-end;
-    }
-
-    .chat-row--user {
-      direction: rtl;
-    }
-
-    .chat-row--user .chat-bubble,
-    .chat-row--user .chat-avatar {
-      direction: ltr;
-    }
-
-    .chat-avatar {
-      width: 2rem;
-      height: 2rem;
-      border-radius: 10px;
-      display: grid;
-      place-items: center;
-      font-size: 0.65rem;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-      flex-shrink: 0;
-    }
-
-    .chat-avatar--user {
-      background: linear-gradient(135deg, var(--color-mint), var(--color-ocean));
-      color: #fff;
-    }
-
-    .chat-avatar--ai {
-      background: linear-gradient(135deg, rgba(244, 211, 94, 0.35), rgba(62, 180, 137, 0.35));
-      color: var(--color-ocean);
-      border: 1px solid rgba(62, 180, 137, 0.25);
-    }
-
-    .chat-bubble {
-      border-radius: 16px 16px 16px 6px;
-      padding: 0.75rem 0.9rem;
-      background: rgba(255, 255, 255, 0.72);
-      border: 1px solid rgba(41, 50, 65, 0.1);
-      display: grid;
-      gap: 0.35rem;
-    }
-
-    .chat-row--user .chat-bubble {
-      border-radius: 16px 16px 6px 16px;
-      color: #fff;
-      background: linear-gradient(135deg, var(--color-mint), var(--color-ocean));
-      border-color: transparent;
-    }
-
-    .chat-bubble p {
-      margin: 0;
-      line-height: 1.55;
-      white-space: pre-wrap;
-    }
-
-    .chat-bubble__meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.35rem 0.65rem;
-      font-size: 0.72rem;
-      color: var(--color-muted);
-    }
-
-    .chat-row--user .chat-bubble__meta {
-      color: rgba(255, 255, 255, 0.75);
-    }
-
-    .chat-bubble__web {
-      font-weight: 700;
-      color: var(--color-mint);
-    }
-
-    .chat-row--user .chat-bubble__web {
-      color: rgba(255, 255, 255, 0.9);
-    }
-
-    .chat-bubble--typing {
-      display: flex;
-      align-items: center;
-      gap: 0.55rem;
-      color: var(--color-muted);
-      font-size: 0.88rem;
-    }
-
-    .typing-dots {
-      display: inline-flex;
-      gap: 0.22rem;
-    }
-
-    .typing-dots span {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--color-mint);
-      animation: typingBounce 1.1s ease-in-out infinite;
-    }
-
-    .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
-    .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
-
-    .chat-composer {
-      padding: 0.85rem 1rem 1rem;
-      border-top: 1px solid rgba(41, 50, 65, 0.08);
-      background: rgba(255, 255, 255, 0.45);
-      display: grid;
-      gap: 0.65rem;
-    }
-
-    .chat-composer__input {
-      resize: none;
-      min-height: 2.75rem;
-    }
-
-    .chat-composer__footer {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.65rem;
-    }
-
-    .chat-composer__send {
-      min-width: 7.5rem;
-    }
-
-    /* Switch */
-    .switch {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.55rem;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .switch input {
-      position: absolute;
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .switch__track {
-      width: 2.65rem;
-      height: 1.45rem;
-      border-radius: 999px;
-      background: rgba(41, 50, 65, 0.18);
-      position: relative;
-      transition: background 220ms ease;
-    }
-
-    .switch__thumb {
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 1.1rem;
-      height: 1.1rem;
-      border-radius: 50%;
-      background: #fff;
-      box-shadow: 0 2px 6px rgba(41, 50, 65, 0.2);
-      transition: transform 220ms ease;
-    }
-
-    .switch input:checked + .switch__track {
-      background: linear-gradient(135deg, var(--color-mint), var(--color-ocean));
-    }
-
-    .switch input:checked + .switch__track .switch__thumb {
-      transform: translateX(1.2rem);
-    }
-
-    .switch input:focus-visible + .switch__track {
-      outline: 2px solid var(--color-mint);
-      outline-offset: 2px;
-    }
-
-    .switch__label {
-      font-size: 0.84rem;
-      font-weight: 600;
-      color: var(--color-muted);
-    }
 
     /* Alerts & replenishment */
     .alert-card,
@@ -1072,26 +708,11 @@ import { LocationApiService } from '../../core/services/catalog-api.service';
       box-shadow: 0 22px 48px rgba(0, 0, 0, 0.35);
     }
 
-    :host-context(:root[data-theme='dark']) .chat-panel {
-      box-shadow:
-        0 0 0 1px rgba(62, 180, 137, 0.2),
-        0 24px 56px rgba(0, 0, 0, 0.35);
-    }
 
-    :host-context(:root[data-theme='dark']) .chat-bubble,
     :host-context(:root[data-theme='dark']) .alert-card,
     :host-context(:root[data-theme='dark']) .replenish-card {
       background: rgba(255, 255, 255, 0.06);
       border-color: rgba(255, 255, 255, 0.1);
-    }
-
-    :host-context(:root[data-theme='dark']) .chat-composer {
-      background: rgba(0, 0, 0, 0.2);
-    }
-
-    :host-context(:root[data-theme='dark']) .chat-suggestion {
-      color: var(--color-text);
-      border-color: rgba(62, 180, 137, 0.35);
     }
 
     :host-context(:root[data-theme='dark']) .severity-badge--critical { color: #ff7e9e; }
@@ -1132,21 +753,9 @@ import { LocationApiService } from '../../core/services/catalog-api.service';
       100% { background-position: -200% 0; }
     }
 
-    @keyframes typingBounce {
-      0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
-      40% { transform: translateY(-4px); opacity: 1; }
-    }
-
     @media (max-width: 1200px) {
       .command-layout {
         grid-template-columns: 1fr;
-      }
-
-      .chat-panel {
-        position: relative;
-        top: 0;
-        max-height: none;
-        min-height: 520px;
       }
     }
 
@@ -1186,25 +795,14 @@ import { LocationApiService } from '../../core/services/catalog-api.service';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class IntelligencePageComponent implements OnInit, AfterViewChecked {
+export class IntelligencePageComponent implements OnInit {
   private readonly aiApi = inject(AiInsightsApiService);
   private readonly locationsApi = inject(LocationApiService);
   private readonly fb = inject(FormBuilder);
-  private readonly chatScrollEl = viewChild<ElementRef<HTMLElement>>('chatScroll');
-
-  private shouldScrollChat = false;
 
   protected readonly insights = signal<AiInsightsResponseDto | null>(null);
   protected readonly insightsLoading = signal(false);
   protected readonly locations = signal<Location[]>([]);
-  protected readonly chatMessages = signal<AiChatMessage[]>([]);
-  protected readonly chatLoading = signal(false);
-
-  protected readonly chatSuggestions = [
-    '¿Qué debo comprar primero?',
-    '¿Cuáles son las alertas más urgentes?',
-    'Resume el estado del inventario'
-  ];
 
   protected readonly filters = this.fb.nonNullable.group({
     from: [this.daysAgo(30)],
@@ -1212,25 +810,18 @@ export class IntelligencePageComponent implements OnInit, AfterViewChecked {
     locationId: [0]
   });
 
-  protected readonly chatForm = this.fb.nonNullable.group({
-    message: [''],
-    useWebSearch: [false]
+  protected readonly chatContext = computed((): AiChatContext => {
+    const raw = this.filters.getRawValue();
+    return {
+      from: raw.from || undefined,
+      to: raw.to || undefined,
+      locationId: raw.locationId || undefined
+    };
   });
 
   ngOnInit(): void {
     this.locationsApi.list().subscribe((locations) => this.locations.set(locations));
     this.load();
-  }
-
-  ngAfterViewChecked(): void {
-    if (!this.shouldScrollChat) {
-      return;
-    }
-    this.shouldScrollChat = false;
-    const el = this.chatScrollEl()?.nativeElement;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-    }
   }
 
   protected load(): void {
@@ -1239,58 +830,6 @@ export class IntelligencePageComponent implements OnInit, AfterViewChecked {
     this.aiApi.getInsights(raw.from || undefined, raw.to || undefined, raw.locationId || undefined)
       .pipe(finalize(() => this.insightsLoading.set(false)))
       .subscribe((data) => this.insights.set(data));
-  }
-
-  protected applySuggestion(text: string): void {
-    this.chatForm.patchValue({ message: text });
-  }
-
-  protected sendMessage(): void {
-    const message = this.chatForm.controls.message.value.trim();
-    if (!message || this.chatLoading()) {
-      return;
-    }
-
-    const raw = this.filters.getRawValue();
-    const useWeb = this.chatForm.controls.useWebSearch.value;
-    this.chatMessages.update((messages) => [...messages, { role: 'user', content: message }]);
-    this.shouldScrollChat = true;
-    this.chatForm.patchValue({ message: '' });
-    this.chatLoading.set(true);
-
-    this.aiApi.sendChat({
-      message,
-      from: raw.from || undefined,
-      to: raw.to || undefined,
-      locationId: raw.locationId || undefined,
-      useWebSearch: useWeb || undefined
-    })
-      .pipe(finalize(() => this.chatLoading.set(false)))
-      .subscribe({
-        next: (response) => {
-          this.chatMessages.update((messages) => [
-            ...messages,
-            {
-              role: 'assistant',
-              content: response.answer,
-              generatedAt: response.generatedAt,
-              model: response.model,
-              webSearchUsed: response.webSearchUsed === true
-            }
-          ]);
-          this.shouldScrollChat = true;
-        },
-        error: (error) => {
-          this.chatMessages.update((messages) => [
-            ...messages,
-            {
-              role: 'assistant',
-              content: this.chatErrorMessage(error)
-            }
-          ]);
-          this.shouldScrollChat = true;
-        }
-      });
   }
 
   protected severityClass(severity: string): string {
@@ -1321,18 +860,5 @@ export class IntelligencePageComponent implements OnInit, AfterViewChecked {
     const date = new Date();
     date.setDate(date.getDate() - days);
     return date.toISOString().slice(0, 10);
-  }
-
-  private chatErrorMessage(error: unknown): string {
-    if (typeof error === 'object' && error !== null && 'error' in error) {
-      const payload = (error as { error?: { error?: string; details?: string } | string }).error;
-      if (typeof payload === 'string') {
-        return payload;
-      }
-      if (payload?.error) {
-        return payload.error;
-      }
-    }
-    return 'No pude conectar con Ollama. Espera a que termine de descargar el modelo o revisa el servicio local.';
   }
 }

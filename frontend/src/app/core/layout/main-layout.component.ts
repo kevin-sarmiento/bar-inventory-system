@@ -4,11 +4,12 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter } from 'rxjs';
 import { RouteMenuItem } from '../models/api.models';
 import { AuthService } from '../services/auth.service';
+import { AiAssistantLauncherComponent } from '../../shared/ui/ai-assistant-launcher.component';
 
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgFor, NgIf],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgFor, NgIf, AiAssistantLauncherComponent],
   template: `
     <div class="shell" [class.shell-collapsed]="sidebarCollapsed()">
       <button
@@ -101,6 +102,8 @@ import { AuthService } from '../services/auth.service';
           <router-outlet></router-outlet>
         </main>
       </div>
+
+      <app-ai-assistant-launcher />
     </div>
   `,
   styles: [`

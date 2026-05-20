@@ -11,11 +11,15 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.regex.Pattern;
 
 @Service
 public class WebSearchService {
     private static final Logger log = LoggerFactory.getLogger(WebSearchService.class);
     private static final String INTERNAL_CLIENT_IP = "10.0.0.1";
+    private static final Pattern FILLER_PREFIX = Pattern.compile(
+            "(?i)^(?:por favor[,\\s]*)?(?:podr[ií]as|puedes|busca(?:r)?(?: en (?:la )?web| en internet)?)[,\\s]*"
+    );
 
     private final WebClient client;
     private final boolean enabled;
@@ -34,7 +38,7 @@ public class WebSearchService {
             url = url.substring(0, url.length() - 1);
         }
         this.client = url.isEmpty() ? null : WebClient.builder().baseUrl(url).build();
-        this.timeout = Duration.ofSeconds(Math.max(3, timeoutSeconds));
+        this.timeout = Duration.ofSeconds(Math.max(5, timeoutSeconds));
     }
 
     /**
@@ -44,19 +48,31 @@ public class WebSearchService {
         if (!Boolean.TRUE.equals(useWebSearch) || !enabled || client == null) {
             return Mono.just("");
         }
-        String q = query == null ? "" : query.strip();
-        if (q.length() > 240) {
-            q = q.substring(0, 240);
-        }
-        if (q.isEmpty()) {
+        String searchQuery = toSearchQuery(query);
+        if (searchQuery.isEmpty()) {
             return Mono.just("");
         }
-        final String searchQuery = q;
+        return searchOnce(searchQuery)
+                .flatMap(block -> {
+                    if (!block.isBlank()) {
+                        return Mono.just(block);
+                    }
+                    String fallback = shortenQuery(searchQuery);
+                    if (fallback.equals(searchQuery)) {
+                        return Mono.just("");
+                    }
+                    log.info("SearxNG sin resultados; reintento con consulta acortada");
+                    return searchOnce(fallback);
+                });
+    }
+
+    private Mono<String> searchOnce(String searchQuery) {
         return client.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/search")
                         .queryParam("q", searchQuery)
                         .queryParam("format", "json")
+                        .queryParam("language", "es")
                         .build())
                 .header(HttpHeaders.USER_AGENT, "BarInventorySystem/1.0 (internal)")
                 .header("X-Forwarded-For", INTERNAL_CLIENT_IP)
@@ -67,7 +83,10 @@ public class WebSearchService {
                 .map(this::formatResults)
                 .doOnNext(block -> {
                     if (block.isBlank()) {
-                        log.warn("SearxNG no devolvio resultados para la consulta (query length={})", searchQuery.length());
+                        log.warn("SearxNG no devolvio resultados para: {}", abbreviate(searchQuery));
+                    } else {
+                        log.debug("SearxNG devolvio contexto web ({} caracteres) para: {}",
+                                block.length(), abbreviate(searchQuery));
                     }
                 })
                 .onErrorResume(WebClientResponseException.class, ex -> {
@@ -80,13 +99,37 @@ public class WebSearchService {
                 });
     }
 
+    static String toSearchQuery(String message) {
+        if (message == null) {
+            return "";
+        }
+        String q = FILLER_PREFIX.matcher(message.strip()).replaceFirst("").strip();
+        if (q.length() > 180) {
+            int question = q.indexOf('?');
+            if (question >= 20 && question < 180) {
+                q = q.substring(0, question + 1);
+            } else {
+                q = q.substring(0, 180).replaceAll("\\s+\\S*$", "").strip();
+            }
+        }
+        return q;
+    }
+
+    private static String shortenQuery(String query) {
+        String[] words = query.split("\\s+");
+        if (words.length <= 6) {
+            return query;
+        }
+        return String.join(" ", java.util.Arrays.copyOf(words, 6));
+    }
+
     private String formatResults(JsonNode root) {
         JsonNode results = root.get("results");
         if (results == null || !results.isArray() || results.isEmpty()) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("Resultados de busqueda web (SearxNG). Cita fuentes; no inventes datos fuera de estos extractos:\n\n");
+        sb.append("Resultados de busqueda web (SearxNG). Usa SOLO estos extractos para datos externos; cita la URL:\n\n");
         int n = 0;
         for (JsonNode r : results) {
             if (n >= maxResults) {
@@ -95,13 +138,16 @@ public class WebSearchService {
             String title = text(r, "title");
             String url = text(r, "url");
             String content = text(r, "content");
+            if (title.isBlank() && content.isBlank()) {
+                continue;
+            }
             if (content.length() > 450) {
                 content = content.substring(0, 450) + "...";
             }
             sb.append(n + 1).append(". ").append(title).append("\n   ").append(url).append("\n   ").append(content).append("\n\n");
             n++;
         }
-        return sb.toString();
+        return n == 0 ? "" : sb.toString();
     }
 
     private static String text(JsonNode node, String field) {
@@ -110,5 +156,12 @@ public class WebSearchService {
             return "";
         }
         return v.asText("").strip();
+    }
+
+    private static String abbreviate(String value) {
+        if (value.length() <= 80) {
+            return value;
+        }
+        return value.substring(0, 77) + "...";
     }
 }

@@ -32,4 +32,4 @@ ai:
     enabled: ${AI_WEB_SEARCH_ENABLED:false}
     base-url: ${AI_WEB_SEARCH_BASE_URL:}
     max-results: ${AI_WEB_SEARCH_MAX_RESULTS:5}
-    timeout-seconds: ${AI_WEB_SEARCH_TIMEOUT_SECONDS:15}
+    timeout-seconds: ${AI_WEB_SEARCH_TIMEOUT_SECONDS:30}
