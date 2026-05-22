@@ -24,7 +24,7 @@ export const appRoutes: Routes = [
         path: 'intelligence',
         loadComponent: () => import('./features/intelligence/intelligence-page.component').then((m) => m.IntelligencePageComponent),
         canActivate: [roleGuard],
-        data: { roles: ['ADMINISTRADOR', 'GERENTE', 'INVENTARIO'] }
+        data: { roles: ['ADMINISTRADOR', 'GERENTE', 'INVENTARIO', 'BARTENDER'] }
       },
       {
         path: 'catalog/categories',

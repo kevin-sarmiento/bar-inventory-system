@@ -3,6 +3,7 @@ import { DecimalPipe, NgFor, NgIf } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AiInsightsResponseDto } from '../../core/models/ai-insights.models';
 import { DashboardSummaryDto } from '../../core/models/report.models';
+import { AuthService } from '../../core/services/auth.service';
 import { AiInsightsApiService } from '../../core/services/ai-insights-api.service';
 import { ReportApiService } from '../../core/services/report-api.service';
 
@@ -66,11 +67,11 @@ import { ReportApiService } from '../../core/services/report-api.service';
               <span class="chip ai-summary__chip">IA local · Ollama</span>
               <span class="ai-summary__live" aria-label="Datos en vivo">En vivo</span>
             </div>
-            <h3>Centro de inteligencia</h3>
+            <h3>Asistente</h3>
             <p class="ai-summary__summary">{{ ai.executiveSummary }}</p>
           </div>
           <a class="btn btn-primary ai-summary__cta" routerLink="/intelligence">
-            Ver inteligencia completa
+            Ver asistente completo
             <span class="ai-summary__cta-arrow" aria-hidden="true">→</span>
           </a>
         </header>
@@ -88,7 +89,7 @@ import { ReportApiService } from '../../core/services/report-api.service';
             </div>
             <small>{{ ai.metrics.criticalAlerts }} críticas · {{ ai.metrics.highAlerts }} altas</small>
           </div>
-          <div class="ai-summary__metric ai-summary__metric--buy">
+          <div class="ai-summary__metric ai-summary__metric--buy" *ngIf="!bartenderAiOnly()">
             <div class="ai-summary__metric-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10-12c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 6.2l-.8-1.4C5.4 3.8 5 3 4 3H2v2h1.2l1.8 3.2 1.2-.7z"/></svg>
             </div>
@@ -607,6 +608,8 @@ import { ReportApiService } from '../../core/services/report-api.service';
 export class DashboardComponent implements OnInit {
   private readonly reportsApi = inject(ReportApiService);
   private readonly aiApi = inject(AiInsightsApiService);
+  private readonly auth = inject(AuthService);
+  protected readonly bartenderAiOnly = this.auth.bartenderAiOnly;
   protected readonly summary = signal<DashboardSummaryDto | null>(null);
   protected readonly insights = signal<AiInsightsResponseDto | null>(null);
   protected readonly topOperationalAlerts = computed(() => this.insights()?.alerts.slice(0, 3) ?? []);

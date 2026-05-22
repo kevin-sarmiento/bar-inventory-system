@@ -22,9 +22,11 @@ Queda disponible en:
 - Swagger UI: `http://localhost:8082/swagger-ui.html`
 - OpenAPI JSON: `http://localhost:8082/v3/api-docs`
 - Ollama: `http://localhost:11434`
-- SearxNG (busqueda web opcional para el chat): `http://localhost:8888` — en **Inteligencia**, activa la casilla *Buscar en la web* antes de enviar.
+- SearxNG (busqueda web opcional para el chat): `http://localhost:8888` — en **Asistente**, activa la casilla *Buscar en la web* antes de enviar.
 
-El primer arranque descarga el modelo local `llama3.2:3b`, por eso puede tardar varios minutos. Despues de iniciar sesion, el chat de IA queda en la pantalla **Inteligencia**.
+El primer arranque descarga el modelo local `llama3.2:3b`, por eso puede tardar varios minutos. Despues de iniciar sesion, el chat de IA queda en la pantalla **Asistente**.
+
+El chat incluye documentacion interna del sistema (`src/main/resources/ai/system-knowledge-full.md` y variante bartender). Puedes ampliar esos archivos para que el copiloto explique mejor modulos, roles y flujos.
 
 Login por defecto:
 - usuario: `admin`
@@ -75,7 +77,7 @@ Ejemplo:
 - `GERENTE`: gestión operativa y turnos
 - `INVENTARIO`: catálogos, recetas, inventario y reportes operativos
 - `CAJERO`: ventas y consulta de sus turnos
-- `BARTENDER`: consulta de sus turnos y operación limitada según reglas
+- `BARTENDER`: consulta de sus turnos, operación limitada según reglas y asistente de IA (solo alertas de barra: stock bajo y vencimientos; sin costos, compras, mermas ni datos de bodega)
 
 ## Módulos y endpoints
 

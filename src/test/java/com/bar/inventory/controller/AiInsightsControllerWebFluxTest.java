@@ -8,6 +8,7 @@ import com.bar.inventory.dto.AiInsightsMetricsDto;
 import com.bar.inventory.dto.AiInsightsResponseDto;
 import com.bar.inventory.dto.AiReplenishmentSuggestionDto;
 import com.bar.inventory.service.AiChatService;
+import com.bar.inventory.service.AiInsightsScopeService;
 import com.bar.inventory.service.AiInsightsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -47,8 +49,13 @@ class AiInsightsControllerWebFluxTest {
     @MockBean
     private AiChatService aiChatService;
 
+    @MockBean
+    private AiInsightsScopeService aiInsightsScopeService;
+
     @Test
     void insightsShouldReturnOperationalRecommendations() {
+        when(aiInsightsScopeService.applyScope(any(Mono.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
         when(aiInsightsService.getInsights(eq(LocalDate.of(2026, 4, 1)), eq(LocalDate.of(2026, 4, 15)), eq(1L)))
                 .thenReturn(Mono.just(responseDto()));
 

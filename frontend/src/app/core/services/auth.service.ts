@@ -21,6 +21,12 @@ export class AuthService {
   readonly isAuthenticated = computed(() => !!this.currentUserSignal());
   readonly roles = computed(() => this.currentUserSignal()?.roles ?? []);
   readonly userId = computed(() => this.currentUserSignal()?.userId ?? null);
+  readonly hasManagementAiScope = computed(() =>
+    this.hasAnyRole(['ADMINISTRADOR', 'GERENTE', 'INVENTARIO'])
+  );
+  readonly bartenderAiOnly = computed(
+    () => this.hasAnyRole(['BARTENDER']) && !this.hasManagementAiScope()
+  );
 
   login(payload: AuthRequest): Observable<AuthResponse> {
     const endpoint = `${API_CONFIG.endpoints.auth}/login`;

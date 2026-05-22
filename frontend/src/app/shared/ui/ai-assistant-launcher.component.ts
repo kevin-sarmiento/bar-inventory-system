@@ -18,7 +18,7 @@ import { AiChatPanelComponent, defaultChatContext } from './ai-chat-panel.compon
         [attr.aria-expanded]="drawerOpen()"
         aria-controls="ai-assistant-drawer">
         <span class="ai-fab__icon" aria-hidden="true">✨</span>
-        Inteligencia
+        Asistente
       </button>
 
       <button
@@ -38,8 +38,8 @@ import { AiChatPanelComponent, defaultChatContext } from './ai-chat-panel.compon
         <header class="ai-drawer__head">
           <div class="ai-drawer__title-block">
             <p class="eyebrow">Copiloto IA</p>
-            <h2 id="ai-drawer-title">Inteligencia</h2>
-            <p class="ai-drawer__hint">Ollama + contexto del inventario (últimos 30 días)</p>
+            <h2 id="ai-drawer-title">Asistente</h2>
+            <p class="ai-drawer__hint">{{ bartenderAiOnly() ? 'Vista de barra: stock y vencimientos' : 'Ollama + contexto del inventario (últimos 30 días)' }}</p>
           </div>
           <div class="ai-drawer__actions">
             <a class="btn btn-secondary" routerLink="/intelligence" (click)="closeDrawer()">Vista completa</a>
@@ -180,11 +180,12 @@ export class AiAssistantLauncherComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
+  protected readonly bartenderAiOnly = this.auth.bartenderAiOnly;
   protected readonly drawerOpen = signal(false);
   protected readonly onIntelligencePage = signal(false);
   protected readonly defaultContext = defaultChatContext();
 
-  private static readonly INTELLIGENCE_ROLES = ['ADMINISTRADOR', 'GERENTE', 'INVENTARIO'];
+  private static readonly INTELLIGENCE_ROLES = ['ADMINISTRADOR', 'GERENTE', 'INVENTARIO', 'BARTENDER'];
 
   protected readonly visible = computed(
     () => this.auth.hasAnyRole(AiAssistantLauncherComponent.INTELLIGENCE_ROLES) && !this.onIntelligencePage()

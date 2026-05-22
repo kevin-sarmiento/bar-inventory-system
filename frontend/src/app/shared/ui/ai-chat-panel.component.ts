@@ -4,12 +4,14 @@ import {
   Component,
   ElementRef,
   Input,
+  computed,
   inject,
   viewChild
 } from '@angular/core';
 import { DatePipe, NgFor, NgIf } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { AiChatContext } from '../../core/models/ai-chat-context.model';
+import { AuthService } from '../../core/services/auth.service';
 import { AiChatSessionService } from '../../core/services/ai-chat-session.service';
 
 @Component({
@@ -25,7 +27,7 @@ import { AiChatSessionService } from '../../core/services/ai-chat-session.servic
         <div class="chat-panel__title-wrap">
           <span class="chip chip--glow">Copiloto Ollama</span>
           <h3>Pregunta sobre tu inventario</h3>
-          <p>Contexto del periodo activo. Activa búsqueda web para complementar con SearxNG.</p>
+          <p>{{ bartenderAiOnly() ? 'Vista de barra: stock y vencimientos en tu área de servicio.' : 'Contexto del periodo activo. Activa búsqueda web para complementar con SearxNG.' }}</p>
         </div>
       </header>
 
@@ -39,7 +41,7 @@ import { AiChatSessionService } from '../../core/services/ai-chat-session.servic
             <button
               type="button"
               class="chat-suggestion"
-              *ngFor="let suggestion of suggestions"
+              *ngFor="let suggestion of suggestions()"
               (click)="applySuggestion(suggestion)">
               {{ suggestion }}
             </button>
@@ -86,7 +88,7 @@ import { AiChatSessionService } from '../../core/services/ai-chat-session.servic
           placeholder="Escribe tu pregunta…"
           [disabled]="chat.loading()"></textarea>
         <div class="chat-composer__footer">
-          <label class="switch">
+          <label class="switch" *ngIf="!bartenderAiOnly()">
             <input type="checkbox" formControlName="useWebSearch" [disabled]="chat.loading()" />
             <span class="switch__track" aria-hidden="true"><span class="switch__thumb"></span></span>
             <span class="switch__label">Buscar en la web (SearxNG)</span>
@@ -433,17 +435,30 @@ import { AiChatSessionService } from '../../core/services/ai-chat-session.servic
 })
 export class AiChatPanelComponent implements AfterViewChecked {
   protected readonly chat = inject(AiChatSessionService);
+  private readonly auth = inject(AuthService);
   private readonly fb = inject(FormBuilder);
   private readonly chatScrollEl = viewChild<ElementRef<HTMLElement>>('chatScroll');
 
   @Input() variant: 'embedded' | 'drawer' = 'embedded';
   @Input() context: AiChatContext = defaultChatContext();
 
-  protected readonly suggestions = [
-    '¿Qué debo comprar primero?',
-    '¿Cuáles son las alertas más urgentes?',
-    'Resume el estado del inventario'
-  ];
+  protected readonly bartenderAiOnly = this.auth.bartenderAiOnly;
+  protected readonly suggestions = computed(() =>
+    this.auth.bartenderAiOnly()
+      ? [
+          '¿Qué insumos están por agotarse en barra?',
+          '¿Qué lotes debo usar primero por vencimiento?',
+          '¿Qué priorizo en servicio hoy?',
+          '¿Cómo hago check-in en mi turno?',
+          '¿Cómo se registra una compra en el sistema?'
+        ]
+      : [
+          '¿Qué debo comprar primero?',
+          '¿Cómo registro una compra en el sistema?',
+          '¿Cuáles son las alertas más urgentes?',
+          '¿Qué hace el módulo de conteos físicos?'
+        ]
+  );
 
   protected readonly form = this.fb.nonNullable.group({
     message: [''],

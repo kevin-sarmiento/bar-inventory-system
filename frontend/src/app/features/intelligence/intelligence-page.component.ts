@@ -6,6 +6,7 @@ import { AiChatContext } from '../../core/models/ai-chat-context.model';
 import { AiInsightsResponseDto, AiReplenishmentSuggestionDto } from '../../core/models/ai-insights.models';
 import { Location } from '../../core/models/catalog.models';
 import { AiInsightsApiService } from '../../core/services/ai-insights-api.service';
+import { AuthService } from '../../core/services/auth.service';
 import { LocationApiService } from '../../core/services/catalog-api.service';
 import { AiChatPanelComponent } from '../../shared/ui/ai-chat-panel.component';
 
@@ -23,9 +24,11 @@ import { AiChatPanelComponent } from '../../shared/ui/ai-chat-panel.component';
             <span class="hero-badge">Ollama</span>
             <span class="hero-badge hero-badge--live">Datos en vivo</span>
           </div>
-          <h2 class="hero-panel__title">Centro de comando inteligente</h2>
+          <h2 class="hero-panel__title">Asistente</h2>
           <p class="hero-panel__subtitle">
-            Alertas, reposición sugerida y copiloto conversacional con los datos reales de tu bar.
+            {{ bartenderAiOnly()
+              ? 'Stock bajo y vencimientos en tu área de servicio, con copiloto para el turno.'
+              : 'Alertas, reposición sugerida y copiloto conversacional con los datos reales de tu bar.' }}
           </p>
         </div>
         <div class="hero-panel__orb" aria-hidden="true">
@@ -66,7 +69,7 @@ import { AiChatPanelComponent } from '../../shared/ui/ai-chat-panel.component';
             <label for="filter-location">Ubicación</label>
             <select id="filter-location" class="select" formControlName="locationId">
               <option [ngValue]="0">Todas las sedes</option>
-              <option *ngFor="let loc of locations()" [ngValue]="loc.id">{{ loc.locationName }}</option>
+              <option *ngFor="let loc of visibleLocations()" [ngValue]="loc.id">{{ loc.locationName }}</option>
             </select>
           </div>
         </div>
@@ -109,7 +112,7 @@ import { AiChatPanelComponent } from '../../shared/ui/ai-chat-panel.component';
             <strong class="metric-tile__value">{{ data.metrics.totalAlerts }}</strong>
             <small>{{ data.metrics.criticalAlerts }} críticas · {{ data.metrics.highAlerts }} altas</small>
           </article>
-          <article class="metric-tile shell-card metric-tile--buy">
+          <article class="metric-tile shell-card metric-tile--buy" *ngIf="!bartenderAiOnly()">
             <div class="metric-tile__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10-12c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 6.2l-.8-1.4C5.4 3.8 5 3 4 3H2v2h1.2l1.8 3.2 1.2-.7zm9.6 0l1.2.7 1.8-3.2H20V3h-2c-1 0-1.4.8-1.4 1.4l-.8 1.4z"/></svg>
             </div>
@@ -125,7 +128,15 @@ import { AiChatPanelComponent } from '../../shared/ui/ai-chat-panel.component';
             <strong class="metric-tile__value">{{ data.metrics.lowStockAlerts }}</strong>
             <small>Productos bajo mínimo</small>
           </article>
-          <article class="metric-tile shell-card metric-tile--anomaly">
+          <article class="metric-tile shell-card metric-tile--expiration" *ngIf="bartenderAiOnly()">
+            <div class="metric-tile__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 1 7 3H4a2 2 0 00-2 2v14a2 2 0 002 2h16a2 2 0 002-2V5a2 2 0 00-2-2h-3l-2-2H9zm1 16-4-4 1.4-1.4 2.6 2.6 5.4-5.4L16 13l-6 6z"/></svg>
+            </div>
+            <span class="metric-tile__label">Vencimientos</span>
+            <strong class="metric-tile__value">{{ data.metrics.expirationAlerts }}</strong>
+            <small>Lotes por usar pronto</small>
+          </article>
+          <article class="metric-tile shell-card metric-tile--anomaly" *ngIf="!bartenderAiOnly()">
             <div class="metric-tile__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
             </div>
@@ -168,7 +179,7 @@ import { AiChatPanelComponent } from '../../shared/ui/ai-chat-panel.component';
                 </div>
               </article>
 
-              <article class="panel-card shell-card">
+              <article class="panel-card shell-card" *ngIf="!bartenderAiOnly()">
                 <header class="panel-card__head">
                   <div class="panel-card__icon panel-card__icon--buy" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-4h7v4zm-2-6H7V7h7v4z"/></svg>
@@ -798,11 +809,19 @@ import { AiChatPanelComponent } from '../../shared/ui/ai-chat-panel.component';
 export class IntelligencePageComponent implements OnInit {
   private readonly aiApi = inject(AiInsightsApiService);
   private readonly locationsApi = inject(LocationApiService);
+  private readonly auth = inject(AuthService);
   private readonly fb = inject(FormBuilder);
 
+  protected readonly bartenderAiOnly = this.auth.bartenderAiOnly;
   protected readonly insights = signal<AiInsightsResponseDto | null>(null);
   protected readonly insightsLoading = signal(false);
   protected readonly locations = signal<Location[]>([]);
+  protected readonly visibleLocations = computed(() => {
+    const list = this.locations();
+    return this.auth.bartenderAiOnly()
+      ? list.filter((loc) => loc.locationType !== 'WAREHOUSE')
+      : list;
+  });
 
   protected readonly filters = this.fb.nonNullable.group({
     from: [this.daysAgo(30)],

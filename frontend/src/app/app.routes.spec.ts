@@ -23,4 +23,8 @@ describe('appRoutes', () => {
   it('deja reportes solo a administracion, gerencia e inventario', () => {
     expect(routeRoles('reports')).toEqual(['ADMINISTRADOR', 'GERENTE', 'INVENTARIO']);
   });
+
+  it('permite asistente a administracion, gerencia, inventario y bartender', () => {
+    expect(routeRoles('intelligence')).toEqual(['ADMINISTRADOR', 'GERENTE', 'INVENTARIO', 'BARTENDER']);
+  });
 });

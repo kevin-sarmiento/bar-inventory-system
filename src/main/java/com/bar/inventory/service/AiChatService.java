@@ -22,17 +22,23 @@ import java.util.concurrent.TimeoutException;
 @Service
 public class AiChatService {
     private final AiInsightsService aiInsightsService;
+    private final AiInsightsScopeService aiInsightsScopeService;
+    private final AiSystemKnowledgeService aiSystemKnowledgeService;
     private final WebSearchService webSearchService;
     private final WebClient ollamaClient;
     private final String model;
     private final Duration timeout;
 
     public AiChatService(AiInsightsService aiInsightsService,
+                         AiInsightsScopeService aiInsightsScopeService,
+                         AiSystemKnowledgeService aiSystemKnowledgeService,
                          WebSearchService webSearchService,
                          @Value("${ai.ollama.base-url}") String ollamaBaseUrl,
                          @Value("${ai.ollama.model}") String model,
                          @Value("${ai.ollama.timeout-seconds}") long timeoutSeconds) {
         this.aiInsightsService = aiInsightsService;
+        this.aiInsightsScopeService = aiInsightsScopeService;
+        this.aiSystemKnowledgeService = aiSystemKnowledgeService;
         this.webSearchService = webSearchService;
         this.ollamaClient = WebClient.builder()
                 .baseUrl(ollamaBaseUrl)
@@ -42,11 +48,27 @@ public class AiChatService {
     }
 
     public Mono<AiChatResponseDto> chat(AiChatRequestDto request) {
-        boolean askedWeb = Boolean.TRUE.equals(request.getUseWebSearch());
-        return aiInsightsService.getInsights(request.getFrom(), request.getTo(), request.getLocationId())
-                .flatMap(insights -> webSearchService.fetchSnippets(request.getMessage(), request.getUseWebSearch())
-                        .flatMap(webBlock -> askOllama(request.getMessage(), insights, webBlock, askedWeb)
-                                .map(ollamaResponse -> toResponse(ollamaResponse, insights, askedWeb && !webBlock.isBlank()))))
+        return aiInsightsScopeService.currentRoles()
+                .flatMap(roles -> {
+                    boolean askedWeb = Boolean.TRUE.equals(request.getUseWebSearch())
+                            && aiInsightsScopeService.allowsWebSearch(roles);
+                    boolean bartenderScope = aiInsightsScopeService.isBartenderOperationalOnly(roles);
+                    return aiInsightsService.getInsights(request.getFrom(), request.getTo(), request.getLocationId())
+                            .flatMap(insights -> aiInsightsScopeService.applyScope(insights, roles))
+                            .flatMap(insights -> webSearchService.fetchSnippets(
+                                            request.getMessage(),
+                                            askedWeb ? Boolean.TRUE : Boolean.FALSE)
+                                    .flatMap(webBlock -> askOllama(
+                                                    request.getMessage(),
+                                                    insights,
+                                                    webBlock,
+                                                    askedWeb,
+                                                    bartenderScope)
+                                            .map(ollamaResponse -> toResponse(
+                                                    ollamaResponse,
+                                                    insights,
+                                                    askedWeb && !webBlock.isBlank()))));
+                })
                 .onErrorMap(WebClientResponseException.class, ex -> {
                     String hint = ollamaErrorHint(ex);
                     return new ResponseStatusException(
@@ -67,10 +89,11 @@ public class AiChatService {
     private Mono<OllamaGenerateResponse> askOllama(String userMessage,
                                                    AiInsightsResponseDto insights,
                                                    String webSnippets,
-                                                   boolean askedWeb) {
+                                                   boolean askedWeb,
+                                                   boolean bartenderScope) {
         OllamaGenerateRequest body = new OllamaGenerateRequest(
                 model,
-                buildPrompt(userMessage, insights, webSnippets, askedWeb),
+                buildPrompt(userMessage, insights, webSnippets, askedWeb, bartenderScope),
                 false,
                 new OllamaOptions(0.2, 700)
         );
@@ -100,7 +123,8 @@ public class AiChatService {
     private String buildPrompt(String userMessage,
                                AiInsightsResponseDto insights,
                                String webSnippets,
-                               boolean askedWeb) {
+                               boolean askedWeb,
+                               boolean bartenderScope) {
         String webSection;
         if (webSnippets != null && !webSnippets.isBlank()) {
             webSection = """
@@ -123,21 +147,50 @@ public class AiChatService {
         } else {
             webSection = "";
         }
-        return """
+        String roleInstructions = bartenderScope
+                ? """
+                Eres el copiloto de barra del Bar SAKE para un bartender.
+                Datos en vivo: solo stock bajo y vencimientos en areas de servicio (barra, cocina, nevera).
+                SI el usuario pregunta COMO hacer algo en el sistema (ej. registrar compra, venta, turno), EXPLICA los pasos
+                segun la documentacion interna, aunque el bartender no tenga permiso para ejecutarlo. Aclara quien debe hacerlo
+                (inventario, gerencia) y que tu rol no puede registrarlo ni ver costos.
+                NO inventes cifras. NO muestres costos, reposicion sugerida, mermas de gestion, conteos ni datos de bodega del contexto en vivo.
+                Nunca digas solo "no puedo" sin dar orientacion util cuando la guia tenga el procedimiento.
+                """
+                : """
                 Eres el Asistente Inteligente del Bar SAKE.
                 Responde siempre en español, de forma clara y accionable.
                 Prioriza el contexto operativo del sistema. Si hay extractos web, son tu fuente para datos externos.
                 No inventes cifras ni hechos que no aparezcan en los contextos. No digas que modificaste el sistema.
+                """;
+        String systemKnowledge = aiSystemKnowledgeService.getKnowledge(bartenderScope);
+        String knowledgeSection = systemKnowledge.isBlank()
+                ? ""
+                : """
                 
-                Contexto del sistema:
+                === Conocimiento del sistema Bar SAKE (documentacion interna) ===
+                Usa esta guia para explicar COMO usar el software, que hace cada modulo, roles y flujos.
+                Para cifras actuales de inventario usa solo el bloque "Contexto operativo en vivo" mas abajo.
+                
+                """ + systemKnowledge + "\n";
+
+        return """
+                %s
+                %s
+                === Contexto operativo en vivo (datos del periodo seleccionado) ===
                 %s
                 %s
                 Pregunta del usuario:
                 %s
-                """.formatted(buildContext(insights), webSection, userMessage);
+                """.formatted(
+                roleInstructions.strip(),
+                knowledgeSection,
+                buildContext(insights, bartenderScope),
+                webSection,
+                userMessage);
     }
 
-    private String buildContext(AiInsightsResponseDto insights) {
+    private String buildContext(AiInsightsResponseDto insights, boolean bartenderScope) {
         StringBuilder context = new StringBuilder();
         context.append("Periodo: ")
                 .append(insights.getFromDate())
@@ -153,14 +206,23 @@ public class AiChatService {
             context.append("Metricas: ")
                     .append(metrics.getTotalAlerts()).append(" alertas, ")
                     .append(metrics.getCriticalAlerts()).append(" criticas, ")
-                    .append(metrics.getHighAlerts()).append(" altas, ")
-                    .append(metrics.getReplenishmentSuggestions()).append(" sugerencias de reposicion, costo estimado ")
-                    .append(metrics.getEstimatedReplenishmentCost())
-                    .append(".\n");
+                    .append(metrics.getHighAlerts()).append(" altas");
+            if (!bartenderScope) {
+                context.append(", ")
+                        .append(metrics.getReplenishmentSuggestions()).append(" sugerencias de reposicion, costo estimado ")
+                        .append(metrics.getEstimatedReplenishmentCost());
+            } else {
+                context.append(", ")
+                        .append(metrics.getLowStockAlerts()).append(" stock bajo, ")
+                        .append(metrics.getExpirationAlerts()).append(" vencimientos proximos");
+            }
+            context.append(".\n");
         }
 
         appendAlerts(context, insights.getAlerts());
-        appendReplenishment(context, insights.getReplenishmentSuggestions());
+        if (!bartenderScope) {
+            appendReplenishment(context, insights.getReplenishmentSuggestions());
+        }
         return context.toString();
     }
 
